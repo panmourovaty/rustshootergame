@@ -1,0 +1,50 @@
+[package]
+name = "rustshootergame"
+version = "0.1.0"
+edition = "2021"
+description = "A Counter Strike inspired FPS game built with Bevy"
+license = "MIT"
+
+[[bin]]
+name = "rustshootergame"
+path = "src/main.rs"
+
+[features]
+default = ["networking"]
+networking = ["dep:lightyear"]
+
+[dependencies]
+bevy = { version = "0.17", default-features = false, features = [
+    "bevy_asset",
+    "bevy_audio",
+    "bevy_core_pipeline",
+    "bevy_mesh",
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_scene",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_winit",
+    "default_font",
+    "multi_threaded",
+    "vorbis",
+    "x11",
+    "wayland",
+    "tonemapping_luts",
+] }
+bevy_fps_controller = { version = "17", features = ["avian"] }
+avian3d = "0.4"
+lightyear = { version = "0.25", features = ["udp", "client", "server", "netcode"], optional = true }
+serde = { version = "1", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

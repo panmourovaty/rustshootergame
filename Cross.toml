@@ -1,0 +1,14 @@
+# Cross.toml — used if cross-compiling with `cross` instead of the native
+# GitHub Actions runners defined in release.yml.
+
+[build]
+pre-build = [
+    "apt-get update -y",
+    "apt-get install -y libvulkan-dev libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev libx11-dev pkg-config",
+]
+
+[target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main"
+
+[target.x86_64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
