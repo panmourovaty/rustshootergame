@@ -53,7 +53,7 @@ impl Scores {
 // ─── Events ─────────────────────────────────────────────────────────────────
 
 /// Emitted when a kill is confirmed, so UI and score tracking can react.
-#[derive(Event, Clone, Debug)]
+#[derive(Message, Clone, Debug)]
 pub struct KillEvent {
     pub killer_id: u32,
     pub victim_id: u32,
@@ -66,7 +66,7 @@ impl Plugin for GamePlugin {
         app.init_state::<GameState>();
         app.init_resource::<GameConfig>();
         app.init_resource::<Scores>();
-        app.add_event::<KillEvent>();
+        app.add_message::<KillEvent>();
 
         // Immediately transition out of Loading on entry.
         app.add_systems(
@@ -89,7 +89,7 @@ impl Plugin for GamePlugin {
 
 // ─── Systems ────────────────────────────────────────────────────────────────
 
-pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: EventReader<KillEvent>) {
+pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: MessageReader<KillEvent>) {
     for ev in kill_events.read() {
         scores.add_kill(ev.killer_id);
         scores.add_death(ev.victim_id);

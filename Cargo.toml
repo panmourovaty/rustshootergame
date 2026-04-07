@@ -15,23 +15,10 @@ networking = ["dep:lightyear"]
 
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = [
-    "bevy_asset",
-    "bevy_audio",
-    "bevy_core_pipeline",
-    "bevy_mesh",
-    "bevy_pbr",
-    "bevy_render",
-    "bevy_scene",
-    "bevy_text",
-    "bevy_ui",
-    "bevy_winit",
+    "3d",         # full 3D: rendering, lighting, audio, UI, state, logging, winit
+    "mouse",      # Bevy 0.18: mouse input is an explicit feature
+    "keyboard",   # Bevy 0.18: keyboard input is an explicit feature
     "default_font",
-    "multi_threaded",
-    "vorbis",
-    "x11",
-    "wayland",
-    "tonemapping_luts",
-    "zstd_rust",
 ] }
 avian3d = "0.5"
 lightyear = { version = "0.26", features = ["udp", "client", "server", "netcode"], optional = true }

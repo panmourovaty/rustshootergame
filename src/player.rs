@@ -207,7 +207,7 @@ fn manage_cursor(
 /// Reads mouse delta and updates yaw/pitch, then applies them to the body and
 /// camera transforms.  Yaw rotates the whole body; pitch only tilts the camera.
 fn fps_look(
-    mut motion_events: EventReader<MouseMotion>,
+    mut motion_events: MessageReader<MouseMotion>,
     mut player_query: Query<(&mut FpsController, &mut Transform), With<LocalPlayer>>,
     mut camera_query: Query<&mut Transform, (With<PlayerCamera>, Without<LocalPlayer>)>,
 ) {

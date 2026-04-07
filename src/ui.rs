@@ -284,7 +284,7 @@ fn update_reloading_text(
 /// Adds a new entry to the kill feed whenever a kill event fires.
 fn append_kill_feed_entries(
     mut commands: Commands,
-    mut kill_events: EventReader<KillEvent>,
+    mut kill_events: MessageReader<KillEvent>,
     feed_query: Query<Entity, With<KillFeedRoot>>,
     scores: Res<Scores>,
 ) {
