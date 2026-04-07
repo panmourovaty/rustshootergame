@@ -6,7 +6,7 @@
 use bevy::prelude::*;
 use lightyear::prelude::client::*;
 use lightyear::prelude::*;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
 use super::protocol::PROTOCOL_ID;
@@ -43,8 +43,14 @@ fn spawn_client_entity(mut commands: Commands, profile: Res<PlayerProfile>) {
         format!("{}:7777", profile.server_addr)
     };
 
-    let server_addr: SocketAddr = match addr_str.parse() {
-        Ok(a) => a,
+    let server_addr: SocketAddr = match addr_str.to_socket_addrs() {
+        Ok(mut addrs) => match addrs.next() {
+            Some(a) => a,
+            None => {
+                error!("Could not resolve server address '{}'", addr_str);
+                return;
+            }
+        },
         Err(e) => {
             error!("Invalid server address '{}': {}", addr_str, e);
             return;
