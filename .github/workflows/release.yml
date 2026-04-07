@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: write
+  deployments: write
 
 # ── Required GitHub Secrets ───────────────────────────────────────────────────
 #
