@@ -45,7 +45,7 @@ pub struct ImpactEffect {
     pub timer: Timer,
 }
 
-// ─── Events (Message in Bevy 0.17) ──────────────────────────────────────────
+// ─── Messages ────────────────────────────────────────────────────────────────
 
 /// Fired when the player successfully pulls the trigger.
 #[derive(Message, Clone, Debug)]

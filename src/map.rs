@@ -31,7 +31,7 @@ fn spawn_map(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // ── Floor ────────────────────────────────────────────────────────────────
-    // Visual: 40×1×40.  Collider half-extents: (20, 0.5, 20).
+    // Visual: 40×1×40.  avian3d 0.5 Collider::cuboid takes full extents.
     commands.spawn((
         Name::new("Floor"),
         Mesh3d(meshes.add(Cuboid::new(40.0, 1.0, 40.0))),
@@ -42,7 +42,7 @@ fn spawn_map(
         })),
         Transform::from_xyz(0.0, -0.5, 0.0),
         RigidBody::Static,
-        Collider::cuboid(20.0, 0.5, 20.0),
+        Collider::cuboid(40.0, 1.0, 40.0),
     ));
 
     // ── Ceiling ───────────────────────────────────────────────────────────────
@@ -56,12 +56,12 @@ fn spawn_map(
         })),
         Transform::from_xyz(0.0, 4.5, 0.0),
         RigidBody::Static,
-        Collider::cuboid(20.0, 0.5, 20.0),
+        Collider::cuboid(40.0, 1.0, 40.0),
     ));
 
     // ── Walls ─────────────────────────────────────────────────────────────────
     // Arena is 40×5×40 (interior).  Each wall is 1 unit thick.
-    // Collider half-extents match half the visual dimensions.
+    // avian3d 0.5 Collider::cuboid takes full extents matching mesh dimensions.
     let wall_mat = materials.add(StandardMaterial {
         base_color: Color::srgb(0.5, 0.5, 0.52),
         perceptual_roughness: 0.85,
@@ -75,7 +75,7 @@ fn spawn_map(
         MeshMaterial3d(wall_mat.clone()),
         Transform::from_xyz(0.0, 2.0, -20.0),
         RigidBody::Static,
-        Collider::cuboid(20.0, 2.5, 0.5),
+        Collider::cuboid(40.0, 5.0, 1.0),
     ));
 
     // South wall (+Z face)
@@ -85,7 +85,7 @@ fn spawn_map(
         MeshMaterial3d(wall_mat.clone()),
         Transform::from_xyz(0.0, 2.0, 20.0),
         RigidBody::Static,
-        Collider::cuboid(20.0, 2.5, 0.5),
+        Collider::cuboid(40.0, 5.0, 1.0),
     ));
 
     // West wall (−X face)
@@ -95,7 +95,7 @@ fn spawn_map(
         MeshMaterial3d(wall_mat.clone()),
         Transform::from_xyz(-20.0, 2.0, 0.0),
         RigidBody::Static,
-        Collider::cuboid(0.5, 2.5, 20.0),
+        Collider::cuboid(1.0, 5.0, 40.0),
     ));
 
     // East wall (+X face)
@@ -105,11 +105,11 @@ fn spawn_map(
         MeshMaterial3d(wall_mat.clone()),
         Transform::from_xyz(20.0, 2.0, 0.0),
         RigidBody::Static,
-        Collider::cuboid(0.5, 2.5, 20.0),
+        Collider::cuboid(1.0, 5.0, 40.0),
     ));
 
     // ── Cover boxes ───────────────────────────────────────────────────────────
-    // 1.5×1.5×1.5 cubes; half-extents = 0.75 each axis.
+    // 1.5×1.5×1.5 cubes; full extents passed to Collider::cuboid (avian3d 0.5).
     let covers: &[(Vec3, Color)] = &[
         (Vec3::new(-5.0, 0.75, -5.0), Color::srgb(0.8, 0.2, 0.2)),  // Red
         (Vec3::new(5.0, 0.75, 5.0), Color::srgb(0.2, 0.3, 0.8)),    // Blue
@@ -132,7 +132,7 @@ fn spawn_map(
             })),
             Transform::from_translation(*pos),
             RigidBody::Static,
-            Collider::cuboid(0.75, 0.75, 0.75),
+            Collider::cuboid(1.5, 1.5, 1.5),
         ));
     }
 
@@ -147,7 +147,7 @@ fn spawn_map(
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -0.8, 0.5, 0.0)),
     ));
 
-    commands.insert_resource(AmbientLight {
+    commands.insert_resource(GlobalAmbientLight {
         color: Color::WHITE,
         brightness: 300.0,
         ..default()

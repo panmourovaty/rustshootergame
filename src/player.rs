@@ -1,7 +1,8 @@
+use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use avian3d::prelude::*;
-use bevy_fps_controller::controller::*;
+use crate::game::GameState;
 use crate::map::SpawnPoints;
 use crate::weapon::Weapon;
 
@@ -35,19 +36,72 @@ impl Default for Health {
     }
 }
 
+/// Marks the camera child entity that renders the player's view.
+#[derive(Component)]
+pub struct PlayerCamera;
+
+/// Simple FPS controller — replaces bevy_fps_controller for Bevy 0.18 compat.
+/// Lives on the logical (physics) player entity.
+#[derive(Component)]
+pub struct FpsController {
+    /// Horizontal look angle (radians). Applied to the body transform.
+    pub yaw: f32,
+    /// Vertical look angle (radians). Applied to the camera child transform.
+    pub pitch: f32,
+    /// Ground-movement speed (m/s).
+    pub speed: f32,
+    /// Ground acceleration (applied per second towards target velocity).
+    pub acceleration: f32,
+    /// Air-strafing acceleration.
+    pub air_acceleration: f32,
+    /// Maximum horizontal speed while airborne.
+    pub max_air_speed: f32,
+    /// Upward impulse applied when jumping.
+    pub jump_force: f32,
+    /// Mouse sensitivity (radians per pixel).
+    pub sensitivity: f32,
+    /// Whether keyboard/mouse input is processed (false when cursor is visible).
+    pub enable_input: bool,
+}
+
+impl Default for FpsController {
+    fn default() -> Self {
+        Self {
+            yaw: 0.0,
+            pitch: 0.0,
+            speed: 8.0,
+            acceleration: 70.0,
+            air_acceleration: 20.0,
+            max_air_speed: 6.0,
+            jump_force: 7.0,
+            sensitivity: 0.002,
+            enable_input: false,
+        }
+    }
+}
+
 // ─── Plugin ─────────────────────────────────────────────────────────────────
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(FpsControllerPlugin);
-        app.add_systems(Startup, spawn_local_player);
-        app.add_systems(Update, (manage_cursor, handle_respawn));
+        // Spawn after the map and spawn points are ready, once gameplay begins.
+        app.add_systems(OnEnter(GameState::Playing), spawn_local_player);
+        app.add_systems(
+            Update,
+            (
+                manage_cursor,
+                fps_look.after(manage_cursor),
+                fps_move.after(fps_look),
+                handle_respawn,
+            )
+                .run_if(in_state(GameState::Playing)),
+        );
     }
 }
 
 // ─── Systems ────────────────────────────────────────────────────────────────
 
-/// Spawns the local player's logical physics entity and the camera render entity.
+/// Spawns the local player's physics body and attaches the camera as a child.
 pub fn spawn_local_player(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -56,43 +110,7 @@ pub fn spawn_local_player(
 ) {
     let spawn_pos = spawn_points.0[0];
 
-    // ── Logical entity: physics + FPS controller ─────────────────────────────
-    // avian3d 0.4: Collider::capsule(radius, length) where length is the
-    // distance between the two hemisphere centres (the cylindrical section height).
-    // Total capsule height = length + 2 * radius.
-    // radius = 0.35 m, length = 1.0 m → total height ≈ 1.7 m.
-    let logical_entity = commands
-        .spawn((
-            Name::new("LocalPlayerLogical"),
-            Transform::from_translation(spawn_pos),
-            // Avian physics
-            RigidBody::Dynamic,
-            Collider::capsule(0.35, 1.0),
-            LockedAxes::ROTATION_LOCKED,
-            LinearVelocity::default(),
-            Friction::new(0.0).with_combine_rule(CoefficientCombine::Min),
-            Restitution::new(0.0).with_combine_rule(CoefficientCombine::Min),
-            GravityScale(2.0),
-            // FPS controller — input starts disabled until cursor is locked
-            FpsController {
-                air_acceleration: 80.0,
-                acceleration: 70.0,
-                max_air_speed: 20.0,
-                enable_input: false,
-                ..default()
-            },
-            CameraConfig {
-                height_offset: 0.0,
-            },
-            // Game logic
-            LocalPlayer,
-            Player { id: 0 },
-            Health::default(),
-            Weapon::default(),
-        ))
-        .id();
-
-    // ── Gun meshes ────────────────────────────────────────────────────────────
+    // Gun meshes — created here, then moved into the camera child closure.
     let gun_body_mesh = meshes.add(Cuboid::new(0.04, 0.08, 0.35));
     let gun_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.12, 0.12, 0.12),
@@ -108,36 +126,59 @@ pub fn spawn_local_player(
         ..default()
     });
 
-    // ── Camera / render entity ────────────────────────────────────────────────
+    // ── Logical entity: physics body + FPS controller ────────────────────────
+    // Collider::capsule(radius, length): radius=0.35 m, cylinder height=1.0 m
+    // → total height 1.7 m.  Half-height (for ground-check ray) = 0.85 m.
     commands
         .spawn((
-            Name::new("LocalPlayerCamera"),
-            Camera3d::default(),
-            Projection::Perspective(PerspectiveProjection {
-                fov: 90.0_f32.to_radians(),
-                ..default()
-            }),
-            RenderPlayer { logical_entity },
+            Name::new("LocalPlayerLogical"),
+            Transform::from_translation(spawn_pos),
+            RigidBody::Dynamic,
+            Collider::capsule(0.35, 1.0),
+            LockedAxes::ROTATION_LOCKED,
+            LinearVelocity::default(),
+            Friction::new(0.0).with_combine_rule(CoefficientCombine::Min),
+            Restitution::new(0.0).with_combine_rule(CoefficientCombine::Min),
+            GravityScale(2.0),
+            FpsController::default(),
+            LocalPlayer,
+            Player { id: 0 },
+            Health::default(),
+            Weapon::default(),
         ))
         .with_children(|parent| {
-            // Gun body (bottom-right of screen)
-            parent.spawn((
-                Name::new("GunBody"),
-                Mesh3d(gun_body_mesh),
-                MeshMaterial3d(gun_material),
-                Transform::from_xyz(0.2, -0.15, -0.4),
-            ));
-            // Barrel extension
-            parent.spawn((
-                Name::new("GunBarrel"),
-                Mesh3d(barrel_mesh),
-                MeshMaterial3d(barrel_material),
-                Transform::from_xyz(0.2, -0.12, -0.63),
-            ));
+            // ── Camera at eye height (0.7 m above capsule centre) ──────────────
+            parent
+                .spawn((
+                    Name::new("LocalPlayerCamera"),
+                    Camera3d::default(),
+                    Projection::Perspective(PerspectiveProjection {
+                        fov: 90.0_f32.to_radians(),
+                        ..default()
+                    }),
+                    Transform::from_xyz(0.0, 0.7, 0.0),
+                    PlayerCamera,
+                ))
+                .with_children(|cam| {
+                    // Gun body visible in bottom-right of view.
+                    cam.spawn((
+                        Name::new("GunBody"),
+                        Mesh3d(gun_body_mesh),
+                        MeshMaterial3d(gun_material),
+                        Transform::from_xyz(0.2, -0.15, -0.4),
+                    ));
+                    // Barrel extension.
+                    cam.spawn((
+                        Name::new("GunBarrel"),
+                        Mesh3d(barrel_mesh),
+                        MeshMaterial3d(barrel_material),
+                        Transform::from_xyz(0.2, -0.12, -0.63),
+                    ));
+                });
         });
 }
 
-/// Left-click to lock the cursor and enable FPS movement; Escape to release.
+/// Left-click locks the cursor and enables FPS input; Escape releases it.
 fn manage_cursor(
     mouse_btn: Res<ButtonInput<MouseButton>>,
     key: Res<ButtonInput<KeyCode>>,
@@ -166,8 +207,116 @@ fn manage_cursor(
     }
 }
 
-/// When the local player's health drops to zero, teleport them back to spawn
-/// and reset their health.
+/// Reads mouse delta and updates yaw/pitch, then applies them to the body and
+/// camera transforms.  Yaw rotates the whole body; pitch only tilts the camera.
+fn fps_look(
+    mut motion_events: MessageReader<MouseMotion>,
+    mut player_query: Query<(&mut FpsController, &mut Transform), With<LocalPlayer>>,
+    mut camera_query: Query<&mut Transform, (With<PlayerCamera>, Without<LocalPlayer>)>,
+) {
+    let Ok((mut controller, mut body_tf)) = player_query.single_mut() else {
+        return;
+    };
+
+    if !controller.enable_input {
+        // Drain events so they don't accumulate while paused.
+        motion_events.clear();
+        return;
+    }
+
+    let mut delta = Vec2::ZERO;
+    for ev in motion_events.read() {
+        delta += ev.delta;
+    }
+    if delta == Vec2::ZERO {
+        return;
+    }
+
+    controller.yaw -= delta.x * controller.sensitivity;
+    controller.pitch = (controller.pitch - delta.y * controller.sensitivity)
+        .clamp(
+            -std::f32::consts::FRAC_PI_2 + 0.01,
+            std::f32::consts::FRAC_PI_2 - 0.01,
+        );
+
+    // Yaw → rotate the physics body around Y.
+    body_tf.rotation = Quat::from_rotation_y(controller.yaw);
+
+    // Pitch → tilt the camera child around X.
+    if let Ok(mut cam_tf) = camera_query.single_mut() {
+        cam_tf.rotation = Quat::from_rotation_x(controller.pitch);
+    }
+}
+
+/// WASD to move, Space to jump.  Uses avian3d physics for collision response.
+fn fps_move(
+    time: Res<Time>,
+    key: Res<ButtonInput<KeyCode>>,
+    mut player_query: Query<
+        (Entity, &FpsController, &Transform, &mut LinearVelocity),
+        With<LocalPlayer>,
+    >,
+    spatial_query: SpatialQuery,
+) {
+    let Ok((entity, ctrl, body_tf, mut vel)) = player_query.single_mut() else {
+        return;
+    };
+    if !ctrl.enable_input {
+        return;
+    }
+
+    let dt = time.delta_secs();
+
+    // ── Ground check ─────────────────────────────────────────────────────────
+    // Cast a short ray downward from the capsule centre.
+    // Capsule half-height (radius + cylinder/2) = 0.35 + 0.5 = 0.85 m.
+    // Adding 0.1 m tolerance → max_distance = 0.95 m.
+    let ground_filter = SpatialQueryFilter {
+        excluded_entities: [entity].into_iter().collect(),
+        ..default()
+    };
+    let is_grounded = spatial_query
+        .cast_ray(body_tf.translation, Dir3::NEG_Y, 0.95, true, &ground_filter)
+        .is_some();
+
+    // ── Build wish-direction from WASD (local space, then rotated by yaw) ────
+    let mut wish_dir = Vec3::ZERO;
+    if key.pressed(KeyCode::KeyW) {
+        wish_dir.z -= 1.0;
+    }
+    if key.pressed(KeyCode::KeyS) {
+        wish_dir.z += 1.0;
+    }
+    if key.pressed(KeyCode::KeyA) {
+        wish_dir.x -= 1.0;
+    }
+    if key.pressed(KeyCode::KeyD) {
+        wish_dir.x += 1.0;
+    }
+
+    if wish_dir.length_squared() > 0.0 {
+        wish_dir = (Quat::from_rotation_y(ctrl.yaw) * wish_dir).normalize();
+    }
+
+    // ── Apply horizontal acceleration ─────────────────────────────────────────
+    let target_speed = if is_grounded { ctrl.speed } else { ctrl.max_air_speed };
+    let accel = if is_grounded { ctrl.acceleration } else { ctrl.air_acceleration };
+
+    let current_xz = Vec3::new(vel.x, 0.0, vel.z);
+    let target_xz = wish_dir * target_speed;
+    let new_xz = current_xz.lerp(target_xz, (accel * dt).min(1.0));
+
+    // ── Jump ──────────────────────────────────────────────────────────────────
+    let new_y = if is_grounded && key.just_pressed(KeyCode::Space) {
+        ctrl.jump_force
+    } else {
+        vel.y
+    };
+
+    vel.0 = Vec3::new(new_xz.x, new_y, new_xz.z);
+}
+
+/// Teleports the local player back to spawn when health reaches zero.
 fn handle_respawn(
     mut query: Query<(&mut Health, &mut Transform, &mut LinearVelocity), With<LocalPlayer>>,
     spawn_points: Res<SpawnPoints>,

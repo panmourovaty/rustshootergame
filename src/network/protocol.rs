@@ -1,8 +1,6 @@
 /// Shared network protocol definitions used by both the server and client.
 ///
-/// NOTE: This file uses lightyear 0.25.  If the crate's API has changed
-/// since these bindings were written, minor adjustments to the channel /
-/// message registration calls may be needed.
+/// Shared protocol — compatible with lightyear 0.26 / Bevy 0.18.
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};

@@ -1,6 +1,6 @@
-/// Dedicated-server network plugin — lightyear 0.25 entity-based API.
+/// Dedicated-server network plugin — lightyear 0.26 entity-based API.
 ///
-/// In lightyear 0.25, a server is created by spawning an entity with:
+/// A server is created by spawning an entity with:
 ///   - `ServerUdpIo::default()` — raw UDP transport
 ///   - `LocalAddr(addr)` — bind address
 ///   - `NetcodeServer::new(cfg)` — secure netcode handshake
