@@ -225,7 +225,7 @@ fn handle_field_click(
 }
 
 fn handle_text_input(
-    mut key_events: EventReader<KeyboardInput>,
+    mut key_events: MessageReader<KeyboardInput>,
     focus: Res<FocusedField>,
     mut profile: ResMut<PlayerProfile>,
 ) {
