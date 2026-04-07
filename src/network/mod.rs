@@ -12,7 +12,7 @@ pub mod server;
 pub mod client;
 
 // Provide empty stubs when the feature is disabled so the module tree
-// still compiles without any `#[cfg]` noise at call sites in main.rs.
+// still compiles without any `#[cfg]` noise at call sites.
 #[cfg(not(feature = "networking"))]
 pub mod server {
     use bevy::prelude::*;
@@ -29,11 +29,9 @@ pub mod server {
 #[cfg(not(feature = "networking"))]
 pub mod client {
     use bevy::prelude::*;
-    use std::net::SocketAddr;
 
-    pub struct ClientNetworkPlugin {
-        pub server_addr: SocketAddr,
-    }
+    /// No-op stub used when the `networking` feature is disabled.
+    pub struct ClientNetworkPlugin;
 
     impl Plugin for ClientNetworkPlugin {
         fn build(&self, _app: &mut App) {}

@@ -2,6 +2,7 @@ use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use avian3d::prelude::*;
+use crate::game::GameState;
 use crate::map::SpawnPoints;
 use crate::weapon::Weapon;
 
@@ -83,7 +84,8 @@ impl Default for FpsController {
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_local_player);
+        // Spawn after the map and spawn points are ready, once gameplay begins.
+        app.add_systems(OnEnter(GameState::Playing), spawn_local_player);
         app.add_systems(
             Update,
             (
@@ -91,7 +93,8 @@ impl Plugin for PlayerPlugin {
                 fps_look.after(manage_cursor),
                 fps_move.after(fps_look),
                 handle_respawn,
-            ),
+            )
+                .run_if(in_state(GameState::Playing)),
         );
     }
 }

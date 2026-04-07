@@ -1,7 +1,8 @@
+/// Client binary — shows the connect screen, then runs the full game.
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
-use clap::Parser;
 
+mod connect_screen;
 mod game;
 mod map;
 mod network;
@@ -9,76 +10,34 @@ mod player;
 mod ui;
 mod weapon;
 
-use game::GamePlugin;
+use connect_screen::ConnectScreenPlugin;
+use game::{GamePlugin, GameState};
 use map::MapPlugin;
 use player::PlayerPlugin;
 use ui::UiPlugin;
 use weapon::WeaponPlugin;
 
-#[derive(Parser, Debug)]
-#[command(name = "rustshootergame", about = "A Counter Strike-like FPS game")]
-struct Args {
-    /// Run as a dedicated server (no window, no rendering)
-    #[arg(long)]
-    server: bool,
-    /// Connect to a remote server as a network client
-    #[arg(long)]
-    client: bool,
-    /// Server hostname / IP to connect to (client mode only)
-    #[arg(long, default_value = "127.0.0.1")]
-    host: String,
-    /// UDP port used by server and client
-    #[arg(long, default_value_t = 7777)]
-    port: u16,
-}
-
 fn main() {
-    let args = Args::parse();
-
-    let mut app = App::new();
-
-    if args.server {
-        // ── Dedicated server ─────────────────────────────────────────────────
-        app.add_plugins(MinimalPlugins);
-        app.add_plugins(avian3d::PhysicsPlugins::default());
-        app.add_plugins(GamePlugin);
-        app.add_plugins(MapPlugin);
-
-        #[cfg(feature = "networking")]
-        {
-            let port = args.port;
-            app.add_plugins(network::server::ServerNetworkPlugin { port });
-        }
-    } else {
-        // ── Demo / client mode — renders the game ────────────────────────────
-        app.add_plugins(DefaultPlugins.set(WindowPlugin {
+    App::new()
+        // Start in the connect screen, not the default Loading state.
+        .insert_state(GameState::ConnectScreen)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "RustShooter".to_string(),
-                resolution: WindowResolution::new(1280, 720),
+                resolution: WindowResolution::new(1280.0, 720.0),
                 ..default()
             }),
             ..default()
-        }));
-        app.add_plugins(avian3d::PhysicsPlugins::default());
-        app.add_plugins(GamePlugin);
-        app.add_plugins(MapPlugin);
-        app.add_plugins(PlayerPlugin);
-        app.add_plugins(WeaponPlugin);
-        app.add_plugins(UiPlugin);
-
-        if args.client {
-            #[cfg(feature = "networking")]
-            {
-                let host = args.host.clone();
-                let port = args.port;
-                app.add_plugins(network::client::ClientNetworkPlugin {
-                    server_addr: format!("{}:{}", host, port)
-                        .parse()
-                        .expect("Invalid server address"),
-                });
-            }
-        }
-    }
-
-    app.run();
+        }))
+        .add_plugins(avian3d::PhysicsPlugins::default())
+        // GamePlugin calls init_state::<GameState>() which is a no-op here
+        // because the state is already inserted above.
+        .add_plugins(GamePlugin)
+        .add_plugins(ConnectScreenPlugin)
+        .add_plugins(MapPlugin)
+        .add_plugins(PlayerPlugin)
+        .add_plugins(WeaponPlugin)
+        .add_plugins(UiPlugin)
+        .add_plugins(network::client::ClientNetworkPlugin)
+        .run();
 }

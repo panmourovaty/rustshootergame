@@ -6,8 +6,12 @@ description = "A Counter Strike inspired FPS game built with Bevy"
 license = "MIT"
 
 [[bin]]
-name = "rustshootergame"
+name = "client"
 path = "src/main.rs"
+
+[[bin]]
+name = "server"
+path = "src/server_main.rs"
 
 [features]
 default = ["networking"]

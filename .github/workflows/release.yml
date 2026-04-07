@@ -8,35 +8,53 @@ permissions:
 
 jobs:
   build:
-    name: Build ${{ matrix.target }}
+    name: Build ${{ matrix.asset_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # ── Windows ────────────────────────────────────────────────────────
+          # ── Client — Windows ──────────────────────────────────────────────────
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: rustshootergame.exe
-            asset_name: rustshootergame-windows-x86_64.exe
+            binary: client
+            artifact_name: client.exe
+            asset_name: client-windows-x86_64.exe
 
-          # ── Linux x86-64 ───────────────────────────────────────────────────
+          # ── Client — Linux x86-64 ─────────────────────────────────────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: rustshootergame
-            asset_name: rustshootergame-linux-amd64
+            binary: client
+            artifact_name: client
+            asset_name: client-linux-amd64
 
-          # ── Linux ARM64 ────────────────────────────────────────────────────
+          # ── Client — Linux ARM64 ──────────────────────────────────────────────
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            artifact_name: rustshootergame
-            asset_name: rustshootergame-linux-arm64
+            binary: client
+            artifact_name: client
+            asset_name: client-linux-arm64
 
-          # ── macOS Apple Silicon ────────────────────────────────────────────
+          # ── Client — macOS Apple Silicon ──────────────────────────────────────
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: rustshootergame
-            asset_name: rustshootergame-macos-arm64
+            binary: client
+            artifact_name: client
+            asset_name: client-macos-arm64
+
+          # ── Server — Linux x86-64 ─────────────────────────────────────────────
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: server
+            artifact_name: server
+            asset_name: server-linux-amd64
+
+          # ── Server — Linux ARM64 ──────────────────────────────────────────────
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: server
+            artifact_name: server
+            asset_name: server-linux-arm64
 
     steps:
       - name: Checkout source
@@ -50,7 +68,7 @@ jobs:
       - name: Cache Rust build artefacts
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
+          key: ${{ matrix.target }}-${{ matrix.binary }}
 
       # ── Linux system dependencies ─────────────────────────────────────────
       - name: Install Linux system dependencies
@@ -72,6 +90,7 @@ jobs:
           cargo build
           --release
           --target ${{ matrix.target }}
+          --bin ${{ matrix.binary }}
 
       # ── Rename & upload artefact ──────────────────────────────────────────
       - name: Rename binary (Unix)

@@ -7,10 +7,32 @@ pub struct GamePlugin;
 
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum GameState {
+    /// Initial state — client shows connect screen; server skips straight to Loading.
     #[default]
+    ConnectScreen,
+    /// Brief transitional state; immediately advances to Playing.
     Loading,
     Playing,
     GameOver,
+}
+
+// ─── Player profile ──────────────────────────────────────────────────────────
+
+/// Set by the connect screen before transitioning to Playing.
+#[derive(Resource)]
+pub struct PlayerProfile {
+    pub username: String,
+    /// Full socket address, e.g. "127.0.0.1:7777".
+    pub server_addr: String,
+}
+
+impl Default for PlayerProfile {
+    fn default() -> Self {
+        Self {
+            username: String::new(),
+            server_addr: "127.0.0.1:7777".to_string(),
+        }
+    }
 }
 
 // ─── Resources ──────────────────────────────────────────────────────────────
@@ -66,6 +88,7 @@ impl Plugin for GamePlugin {
         app.init_state::<GameState>();
         app.init_resource::<GameConfig>();
         app.init_resource::<Scores>();
+        app.init_resource::<PlayerProfile>();
         app.add_message::<KillEvent>();
 
         // Immediately transition out of Loading on entry.
