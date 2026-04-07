@@ -19,8 +19,6 @@ use weapon::WeaponPlugin;
 
 fn main() {
     App::new()
-        // Start in the connect screen, not the default Loading state.
-        .insert_state(GameState::ConnectScreen)
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "RustShooter".to_string(),
@@ -35,6 +33,9 @@ fn main() {
             }),
             ..default()
         }))
+        // insert_state must come after DefaultPlugins so that the StateTransition
+        // schedule (registered by StatesPlugin inside DefaultPlugins) already exists.
+        .insert_state(GameState::ConnectScreen)
         .add_plugins(avian3d::PhysicsPlugins::default())
         // GamePlugin calls init_state::<GameState>() which is a no-op here
         // because the state is already inserted above.
