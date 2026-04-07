@@ -21,6 +21,9 @@ struct FieldDisplay(InputField);
 struct ConnectScreenRoot;
 
 #[derive(Component)]
+struct ConnectScreenCamera;
+
+#[derive(Component)]
 struct ConnectButton;
 
 #[derive(Component)]
@@ -55,6 +58,12 @@ impl Plugin for ConnectScreenPlugin {
 // ─── Spawn ───────────────────────────────────────────────────────────────────
 
 fn spawn_connect_screen(mut commands: Commands, profile: Res<PlayerProfile>) {
+    commands.spawn((
+        Name::new("ConnectScreenCamera"),
+        ConnectScreenCamera,
+        Camera2d,
+    ));
+
     commands
         .spawn((
             Name::new("ConnectScreenRoot"),
@@ -204,9 +213,13 @@ fn spawn_connect_screen(mut commands: Commands, profile: Res<PlayerProfile>) {
 
 fn despawn_connect_screen(
     mut commands: Commands,
-    query: Query<Entity, With<ConnectScreenRoot>>,
+    root_query: Query<Entity, With<ConnectScreenRoot>>,
+    camera_query: Query<Entity, With<ConnectScreenCamera>>,
 ) {
-    for entity in query.iter() {
+    for entity in root_query.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in camera_query.iter() {
         commands.entity(entity).despawn();
     }
 }
