@@ -21,9 +21,11 @@ fn main() {
     let args = Args::parse();
 
     App::new()
+        .add_plugins(MinimalPlugins)
+        // insert_state must come after MinimalPlugins so the StateTransition
+        // schedule (registered by StatesPlugin) already exists.
         // Start directly in Loading → Playing; skip ConnectScreen.
         .insert_state(GameState::Loading)
-        .add_plugins(MinimalPlugins)
         .add_plugins(avian3d::PhysicsPlugins::default())
         .add_plugins(GamePlugin)
         .add_plugins(MapPlugin)
