@@ -53,8 +53,7 @@ impl Scores {
 // ─── Events ─────────────────────────────────────────────────────────────────
 
 /// Emitted when a kill is confirmed, so UI and score tracking can react.
-/// Uses `Message` (Bevy 0.17 renamed Event → Message for the system-param trait).
-#[derive(Message, Clone, Debug)]
+#[derive(Event, Clone, Debug)]
 pub struct KillEvent {
     pub killer_id: u32,
     pub victim_id: u32,
@@ -67,7 +66,7 @@ impl Plugin for GamePlugin {
         app.init_state::<GameState>();
         app.init_resource::<GameConfig>();
         app.init_resource::<Scores>();
-        app.add_message::<KillEvent>();
+        app.add_event::<KillEvent>();
 
         // Immediately transition out of Loading on entry.
         app.add_systems(
@@ -90,7 +89,7 @@ impl Plugin for GamePlugin {
 
 // ─── Systems ────────────────────────────────────────────────────────────────
 
-pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: MessageReader<KillEvent>) {
+pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: EventReader<KillEvent>) {
     for ev in kill_events.read() {
         scores.add_kill(ev.killer_id);
         scores.add_death(ev.victim_id);

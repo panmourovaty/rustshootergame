@@ -1,6 +1,6 @@
-/// Client network plugin using lightyear 0.25's entity-based API.
+/// Client network plugin using lightyear 0.26's entity-based API.
 ///
-/// In lightyear 0.25, the client connects by spawning an entity with:
+/// The client connects by spawning an entity with:
 ///   - `UdpIo::default()` — the raw UDP IO layer
 ///   - `LocalAddr(bind_addr)` — local port (OS-assigned with port 0)
 ///   - `NetcodeClient::new(auth, config)` — secure netcode connection

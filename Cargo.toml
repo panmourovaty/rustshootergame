@@ -14,7 +14,7 @@ default = ["networking"]
 networking = ["dep:lightyear"]
 
 [dependencies]
-bevy = { version = "0.17", default-features = false, features = [
+bevy = { version = "0.18", default-features = false, features = [
     "bevy_asset",
     "bevy_audio",
     "bevy_core_pipeline",
@@ -31,10 +31,10 @@ bevy = { version = "0.17", default-features = false, features = [
     "x11",
     "wayland",
     "tonemapping_luts",
+    "zstd_rust",
 ] }
-bevy_fps_controller = { version = "17", features = ["avian"] }
-avian3d = "0.4"
-lightyear = { version = "0.25", features = ["udp", "client", "server", "netcode"], optional = true }
+avian3d = "0.5"
+lightyear = { version = "0.26", features = ["udp", "client", "server", "netcode"], optional = true }
 serde = { version = "1", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
 

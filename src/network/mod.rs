@@ -1,7 +1,6 @@
 /// Network subsystem — gated behind the `networking` feature flag.
 ///
-/// The lightyear 0.25 API may require minor adjustments if breaking
-/// changes landed after the dependency was locked.
+/// Uses lightyear 0.26 (Bevy 0.18 compatible).
 
 #[cfg(feature = "networking")]
 pub mod protocol;

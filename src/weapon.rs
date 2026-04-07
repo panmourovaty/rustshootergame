@@ -45,10 +45,10 @@ pub struct ImpactEffect {
     pub timer: Timer,
 }
 
-// ─── Events (Message in Bevy 0.17) ──────────────────────────────────────────
+// ─── Events ──────────────────────────────────────────────────────────────────
 
 /// Fired when the player successfully pulls the trigger.
-#[derive(Message, Clone, Debug)]
+#[derive(Event, Clone, Debug)]
 pub struct ShootEvent {
     pub origin: Vec3,
     pub direction: Dir3,
@@ -57,7 +57,7 @@ pub struct ShootEvent {
 }
 
 /// Fired when a raycast hits an entity with a `Health` component.
-#[derive(Message, Clone, Debug)]
+#[derive(Event, Clone, Debug)]
 pub struct HitEvent {
     pub shooter_entity: Entity,
     pub target: Entity,
@@ -69,8 +69,8 @@ pub struct HitEvent {
 
 impl Plugin for WeaponPlugin {
     fn build(&self, app: &mut App) {
-        app.add_message::<ShootEvent>();
-        app.add_message::<HitEvent>();
+        app.add_event::<ShootEvent>();
+        app.add_event::<HitEvent>();
         app.add_systems(
             Update,
             (
@@ -124,7 +124,7 @@ fn handle_shooting(
     cursor_query: Query<&CursorOptions>,
     camera_query: Query<&GlobalTransform, With<Camera3d>>,
     mut weapon_query: Query<(Entity, &mut Weapon), With<LocalPlayer>>,
-    mut shoot_events: MessageWriter<ShootEvent>,
+    mut shoot_events: EventWriter<ShootEvent>,
 ) {
     // Gameplay is only active while the cursor is locked.
     let Ok(cursor) = cursor_query.single() else {
@@ -152,7 +152,7 @@ fn handle_shooting(
         weapon.last_fire_time = elapsed;
 
         if let Ok(cam_tf) = camera_query.single() {
-            shoot_events.write(ShootEvent {
+            shoot_events.send(ShootEvent {
                 origin: cam_tf.translation(),
                 direction: cam_tf.forward(),
                 shooter: shooter_entity,
@@ -171,8 +171,8 @@ fn process_shoot_events(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut shoot_events: MessageReader<ShootEvent>,
-    mut hit_events: MessageWriter<HitEvent>,
+    mut shoot_events: EventReader<ShootEvent>,
+    mut hit_events: EventWriter<HitEvent>,
     spatial_query: SpatialQuery,
     health_query: Query<&Health>,
 ) {
@@ -195,7 +195,7 @@ fn process_shoot_events(
 
             // Only damage entities that have health.
             if health_query.get(hit.entity).is_ok() {
-                hit_events.write(HitEvent {
+                hit_events.send(HitEvent {
                     shooter_entity: event.shooter,
                     target: hit.entity,
                     damage: event.damage,
@@ -223,10 +223,10 @@ fn process_shoot_events(
 
 /// Applies damage and emits `KillEvent` on kill.
 fn apply_damage(
-    mut hit_events: MessageReader<HitEvent>,
+    mut hit_events: EventReader<HitEvent>,
     mut health_query: Query<(&mut Health, Option<&Player>)>,
     shooter_query: Query<Option<&Player>>,
-    mut kill_events: MessageWriter<KillEvent>,
+    mut kill_events: EventWriter<KillEvent>,
 ) {
     for event in hit_events.read() {
         if let Ok((mut health, victim_player)) = health_query.get_mut(event.target) {
@@ -246,7 +246,7 @@ fn apply_damage(
                 let victim_id = victim_player.map(|p| p.id).unwrap_or(0);
 
                 info!("Kill! Player {} killed player {}.", killer_id, victim_id);
-                kill_events.write(KillEvent { killer_id, victim_id });
+                kill_events.send(KillEvent { killer_id, victim_id });
             }
         }
     }

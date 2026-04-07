@@ -1,4 +1,3 @@
-use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::prelude::*;
 use crate::game::{GameState, KillEvent, Scores};
 use crate::player::{Health, LocalPlayer};
@@ -285,7 +284,7 @@ fn update_reloading_text(
 /// Adds a new entry to the kill feed whenever a kill event fires.
 fn append_kill_feed_entries(
     mut commands: Commands,
-    mut kill_events: MessageReader<KillEvent>,
+    mut kill_events: EventReader<KillEvent>,
     feed_query: Query<Entity, With<KillFeedRoot>>,
     scores: Res<Scores>,
 ) {
