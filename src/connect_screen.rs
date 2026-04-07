@@ -132,35 +132,37 @@ fn spawn_connect_screen(mut commands: Commands, profile: Res<PlayerProfile>) {
                         ));
                     });
 
-                // ── Server address ─────────────────────────────────────────────
-                panel.spawn((
-                    Text::new("Server Address"),
-                    TextFont { font_size: 15.0, ..default() },
-                    TextColor(Color::srgb(0.72, 0.72, 0.72)),
-                    Node { margin: UiRect::top(Val::Px(8.0)), ..default() },
-                ));
-                panel
-                    .spawn((
-                        Name::new("ServerInput"),
-                        Button,
-                        InputField::ServerIp,
-                        Node {
-                            width: Val::Percent(100.0),
-                            height: Val::Px(42.0),
-                            padding: UiRect::axes(Val::Px(12.0), Val::Px(8.0)),
-                            align_items: AlignItems::Center,
-                            ..default()
-                        },
-                        BackgroundColor(Color::srgb(0.14, 0.14, 0.20)),
-                    ))
-                    .with_children(|btn| {
-                        btn.spawn((
-                            Text::new(profile.server_addr.clone() + " "),
-                            TextFont { font_size: 20.0, ..default() },
-                            TextColor(Color::WHITE),
-                            FieldDisplay(InputField::ServerIp),
-                        ));
-                    });
+                // ── Server address (hidden when SERVER_ADDR env var is set) ────
+                if !profile.server_addr_locked {
+                    panel.spawn((
+                        Text::new("Server Address"),
+                        TextFont { font_size: 15.0, ..default() },
+                        TextColor(Color::srgb(0.72, 0.72, 0.72)),
+                        Node { margin: UiRect::top(Val::Px(8.0)), ..default() },
+                    ));
+                    panel
+                        .spawn((
+                            Name::new("ServerInput"),
+                            Button,
+                            InputField::ServerIp,
+                            Node {
+                                width: Val::Percent(100.0),
+                                height: Val::Px(42.0),
+                                padding: UiRect::axes(Val::Px(12.0), Val::Px(8.0)),
+                                align_items: AlignItems::Center,
+                                ..default()
+                            },
+                            BackgroundColor(Color::srgb(0.14, 0.14, 0.20)),
+                        ))
+                        .with_children(|btn| {
+                            btn.spawn((
+                                Text::new(profile.server_addr.clone() + " "),
+                                TextFont { font_size: 20.0, ..default() },
+                                TextColor(Color::WHITE),
+                                FieldDisplay(InputField::ServerIp),
+                            ));
+                        });
+                }
 
                 // ── Error line ─────────────────────────────────────────────────
                 panel.spawn((

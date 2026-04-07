@@ -24,13 +24,22 @@ pub struct PlayerProfile {
     pub username: String,
     /// Full socket address, e.g. "127.0.0.1:7777".
     pub server_addr: String,
+    /// True when `SERVER_ADDR` env var was set at launch; hides the IP field
+    /// on the connect screen so users cannot change it.
+    pub server_addr_locked: bool,
 }
 
 impl Default for PlayerProfile {
     fn default() -> Self {
+        let (server_addr, server_addr_locked) =
+            match std::env::var("SERVER_ADDR") {
+                Ok(val) if !val.is_empty() => (val, true),
+                _ => ("127.0.0.1:7777".to_string(), false),
+            };
         Self {
             username: String::new(),
-            server_addr: "127.0.0.1:7777".to_string(),
+            server_addr,
+            server_addr_locked,
         }
     }
 }
