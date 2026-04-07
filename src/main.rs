@@ -25,6 +25,12 @@ fn main() {
             primary_window: Some(Window {
                 title: "RustShooter".to_string(),
                 resolution: WindowResolution::new(1280, 720),
+                // On WASM, render into the <canvas id="bevy"> element and let it
+                // fill the browser viewport.
+                #[cfg(target_arch = "wasm32")]
+                canvas: Some("#bevy".to_string()),
+                #[cfg(target_arch = "wasm32")]
+                fit_canvas_to_parent: true,
                 ..default()
             }),
             ..default()

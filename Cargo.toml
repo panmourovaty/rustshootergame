@@ -16,6 +16,17 @@ path = "src/server_main.rs"
 [features]
 default = ["networking"]
 networking = ["dep:lightyear"]
+# WASM / web build: enables WebGL 2 rendering, disables networking (UDP is not
+# available in browsers).  Build with:
+#   cargo build --target wasm32-unknown-unknown --bin client \
+#               --no-default-features --features web --release
+web = [
+    "bevy/webgl2",
+    "bevy/3d",
+    "bevy/mouse",
+    "bevy/keyboard",
+    "bevy/default_font",
+]
 
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = [
@@ -38,4 +49,11 @@ opt-level = 3
 [profile.release]
 opt-level = 3
 lto = "thin"
+codegen-units = 1
+
+# WASM release: smaller binary, no debug info.
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
 codegen-units = 1

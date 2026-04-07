@@ -6,50 +6,69 @@ on:
 permissions:
   contents: write
 
+# ── Required GitHub Secrets ───────────────────────────────────────────────────
+#
+#   CLOUDFLARE_API_TOKEN      Cloudflare API token with
+#                             "Cloudflare Pages: Edit" permission.
+#                             Create at https://dash.cloudflare.com/profile/api-tokens
+#
+#   CLOUDFLARE_ACCOUNT_ID     Your Cloudflare account ID.
+#                             Visible in the right-hand sidebar of any zone
+#                             or at https://dash.cloudflare.com → select account.
+#
+#   CLOUDFLARE_PAGES_PROJECT  Name of the Cloudflare Pages project to deploy to.
+#                             Create the project once at
+#                             https://dash.cloudflare.com → Pages → Create a project
+#                             (choose "Direct Upload" — CI will handle all uploads).
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
 jobs:
-  build:
+
+  # ── Native binaries (client + server) ───────────────────────────────────────
+  build-native:
     name: Build ${{ matrix.asset_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # ── Client — Windows ──────────────────────────────────────────────────
+          # ── Client — Windows ────────────────────────────────────────────────
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary: client
             artifact_name: client.exe
             asset_name: client-windows-x86_64.exe
 
-          # ── Client — Linux x86-64 ─────────────────────────────────────────────
+          # ── Client — Linux x86-64 ───────────────────────────────────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: client
             artifact_name: client
             asset_name: client-linux-amd64
 
-          # ── Client — Linux ARM64 ──────────────────────────────────────────────
+          # ── Client — Linux ARM64 ────────────────────────────────────────────
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             binary: client
             artifact_name: client
             asset_name: client-linux-arm64
 
-          # ── Client — macOS Apple Silicon ──────────────────────────────────────
+          # ── Client — macOS Apple Silicon ────────────────────────────────────
           - os: macos-latest
             target: aarch64-apple-darwin
             binary: client
             artifact_name: client
             asset_name: client-macos-arm64
 
-          # ── Server — Linux x86-64 ─────────────────────────────────────────────
+          # ── Server — Linux x86-64 ───────────────────────────────────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: server
             artifact_name: server
             asset_name: server-linux-amd64
 
-          # ── Server — Linux ARM64 ──────────────────────────────────────────────
+          # ── Server — Linux ARM64 ────────────────────────────────────────────
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             binary: server
@@ -70,7 +89,6 @@ jobs:
         with:
           key: ${{ matrix.target }}-${{ matrix.binary }}
 
-      # ── Linux system dependencies ─────────────────────────────────────────
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
@@ -84,7 +102,6 @@ jobs:
             libx11-dev \
             pkg-config
 
-      # ── Build ─────────────────────────────────────────────────────────────
       - name: Build release binary
         run: >
           cargo build
@@ -92,7 +109,6 @@ jobs:
           --target ${{ matrix.target }}
           --bin ${{ matrix.binary }}
 
-      # ── Rename & upload artefact ──────────────────────────────────────────
       - name: Rename binary (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -114,26 +130,110 @@ jobs:
           path: ${{ matrix.asset_name }}
           if-no-files-found: error
 
-  # ── Create GitHub Release and attach all binaries ────────────────────────
+  # ── WASM web client ──────────────────────────────────────────────────────────
+  build-wasm:
+    name: Build WASM web client
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (with wasm32 target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust build artefacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: wasm32-client
+
+      - name: Build WASM binary
+        run: >
+          cargo build
+          --profile wasm-release
+          --target wasm32-unknown-unknown
+          --bin client
+          --no-default-features
+          --features web
+
+      - name: Install wasm-bindgen-cli (version matched to Cargo.lock)
+        run: |
+          VER=$(grep -A2 'name = "wasm-bindgen"' Cargo.lock \
+                | grep 'version' | head -1 | cut -d'"' -f2)
+          echo "Installing wasm-bindgen-cli $VER"
+          cargo install wasm-bindgen-cli --version "=$VER" --locked
+
+      - name: Generate JS bindings
+        run: |
+          mkdir -p web-dist
+          wasm-bindgen \
+            --out-dir web-dist \
+            --target web \
+            target/wasm32-unknown-unknown/wasm-release/client.wasm
+
+      - name: Copy HTML
+        run: cp web/index.html web-dist/index.html
+
+      - name: Upload WASM artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web-dist/
+          if-no-files-found: error
+
+      # Deploy to Cloudflare Pages only on main branch.
+      - name: Deploy to Cloudflare Pages
+        if: github.ref == 'refs/heads/main'
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
+          directory: web-dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          # Mark the main-branch deployment as "production" in CF Pages.
+          branch: main
+
+  # ── GitHub Release (main branch only, rolling "latest") ─────────────────────
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: build-native
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.ref == 'refs/heads/main'
+
     steps:
-      - name: Download all build artefacts
+      - name: Download all native build artefacts
         uses: actions/download-artifact@v4
         with:
           path: dist/
+          # Exclude the WASM artefact — it is deployed to Cloudflare Pages.
+          pattern: "client-*,server-*"
 
       - name: List artefacts
         run: find dist/ -type f | sort
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Create or update rolling "latest" release
+        uses: ncipollo/release-action@v1
         with:
-          generate_release_notes: true
-          files: |
-            dist/**/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag: latest
+          name: "Latest Build"
+          body: |
+            Automated build from the `main` branch — commit ${{ github.sha }}.
+
+            | Binary | Platform |
+            |--------|----------|
+            | `client-windows-x86_64.exe` | Windows x86-64 |
+            | `client-linux-amd64` | Linux x86-64 |
+            | `client-linux-arm64` | Linux ARM64 |
+            | `client-macos-arm64` | macOS Apple Silicon |
+            | `server-linux-amd64` | Linux x86-64 (headless server) |
+            | `server-linux-arm64` | Linux ARM64 (headless server) |
+
+            The web client is deployed to Cloudflare Pages automatically.
+          prerelease: true
+          allowUpdates: true
+          removeArtifacts: true
+          artifacts: "dist/**/*"
+          token: ${{ secrets.GITHUB_TOKEN }}
