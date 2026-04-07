@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Windows ────────────────────────────────────────────────────────
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: rustshootergame.exe
+            asset_name: rustshootergame-windows-x86_64.exe
+
+          # ── Linux x86-64 ───────────────────────────────────────────────────
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: rustshootergame
+            asset_name: rustshootergame-linux-amd64
+
+          # ── Linux ARM64 ────────────────────────────────────────────────────
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact_name: rustshootergame
+            asset_name: rustshootergame-linux-arm64
+
+          # ── macOS Apple Silicon ────────────────────────────────────────────
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: rustshootergame
+            asset_name: rustshootergame-macos-arm64
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build artefacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # ── Linux system dependencies ─────────────────────────────────────────
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libvulkan-dev \
+            libasound2-dev \
+            libudev-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libx11-dev \
+            pkg-config
+
+      # ── Build ─────────────────────────────────────────────────────────────
+      - name: Build release binary
+        run: >
+          cargo build
+          --release
+          --target ${{ matrix.target }}
+
+      # ── Rename & upload artefact ──────────────────────────────────────────
+      - name: Rename binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} \
+             ${{ matrix.asset_name }}
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item `
+            "target\${{ matrix.target }}\release\${{ matrix.artifact_name }}" `
+            "${{ matrix.asset_name }}"
+
+      - name: Upload build artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: ${{ matrix.asset_name }}
+          if-no-files-found: error
+
+  # ── Create GitHub Release and attach all binaries ────────────────────────
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: List artefacts
+        run: find dist/ -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
