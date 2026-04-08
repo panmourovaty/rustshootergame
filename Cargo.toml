@@ -73,6 +73,7 @@ clap = { version = "4", features = ["derive"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # Used to read window.__RSG_SERVER_ADDR__ set by index.html from server.txt.
 js-sys = "0.3"
+wasm-bindgen = "0.2"
 
 [profile.dev]
 opt-level = 1

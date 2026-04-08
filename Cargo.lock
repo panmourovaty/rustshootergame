@@ -6643,6 +6643,7 @@ dependencies = [
  "js-sys",
  "lightyear",
  "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]
