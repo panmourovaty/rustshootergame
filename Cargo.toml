@@ -58,6 +58,9 @@ bevy = { version = "0.18", default-features = false, features = [
 avian3d = "0.5"
 lightyear = { version = "0.26", optional = true }
 aeronet_webtransport = { version = "0.19", optional = true }
+# getrandom needs the "js" feature to compile for wasm32-unknown-unknown,
+# so it can use the browser's crypto.getRandomValues() API.
+getrandom = { version = "0.2", features = ["js"] }
 serde = { version = "1", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
 
