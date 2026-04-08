@@ -24,6 +24,12 @@ use std::net::SocketAddr;
 use super::protocol::PROTOCOL_ID;
 use crate::game::{ConnectionError, GameState, PlayerProfile};
 
+fn random_client_id() -> u64 {
+    let mut buf = [0u8; 8];
+    getrandom::getrandom(&mut buf).expect("getrandom failed");
+    u64::from_le_bytes(buf)
+}
+
 // ─── Plugin ─────────────────────────────────────────────────────────────────
 
 pub struct ClientNetworkPlugin;
@@ -79,7 +85,7 @@ fn start_connecting(mut commands: Commands, profile: Res<PlayerProfile>) {
 
     let auth = Authentication::Manual {
         server_addr,
-        client_id: 1u64,
+        client_id: random_client_id(),
         private_key: [0u8; 32],
         protocol_id: PROTOCOL_ID,
     };
