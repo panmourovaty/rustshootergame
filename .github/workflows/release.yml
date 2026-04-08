@@ -214,6 +214,15 @@ jobs:
             --target web \
             target/wasm32-unknown-unknown/wasm-release/client.wasm
 
+      - name: Install wasm-opt (Binaryen)
+        run: sudo apt-get install -y binaryen
+
+      - name: Optimise WASM with wasm-opt
+        run: |
+          wasm-opt -Oz --strip-debug --vacuum \
+            web-dist/client_bg.wasm \
+            -o web-dist/client_bg.wasm
+
       - name: Copy HTML
         run: cp web/index.html web-dist/index.html
 

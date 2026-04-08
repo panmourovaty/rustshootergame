@@ -263,13 +263,31 @@ cargo build \
   --bin client
 ```
 
-Step 3 — run `wasm-bindgen` and bundle:
+Step 3 — run `wasm-bindgen` and optimise with `wasm-opt`:
 
 ```bash
 wasm-bindgen \
   --out-dir dist/ \
   --target web \
   target/wasm32-unknown-unknown/wasm-release/client.wasm
+
+# Shrink and optimise the output (requires binaryen — see below)
+wasm-opt -Oz --strip-debug --vacuum \
+  dist/client_bg.wasm \
+  -o dist/client_bg.wasm
+```
+
+Install `wasm-opt` via your package manager if you don't have it:
+
+```bash
+# Ubuntu / Debian
+sudo apt-get install binaryen
+
+# macOS
+brew install binaryen
+
+# Windows (winget)
+winget install WebAssembly.Binaryen
 ```
 
 Step 4 — serve `dist/` over HTTPS. Any local dev server with TLS works (e.g. `caddy file-server --listen :8443 --root dist/`).
