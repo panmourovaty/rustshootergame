@@ -163,14 +163,17 @@ fn spawn_transport(
     netcode_client: NetcodeClient,
     _profile: &PlayerProfile,
 ) {
+    use lightyear::prelude::client::Connect;
     let local_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0);
-    commands.spawn((
+    let entity = commands.spawn((
         Name::new("GameClient"),
         PendingClient,
         UdpIo::default(),
         LocalAddr(local_addr),
         netcode_client,
-    ));
+    )).id();
+    // lightyear only initiates the handshake once it receives the Connect trigger.
+    commands.trigger(Connect { entity });
     info!("Using UDP transport → {}", server_addr);
 }
 
@@ -187,7 +190,7 @@ fn spawn_transport(
     netcode_client: NetcodeClient,
     _profile: &PlayerProfile,
 ) {
-    use lightyear::prelude::client::WebTransportClientIo;
+    use lightyear::prelude::client::{Connect, WebTransportClientIo};
 
     // Cert digest baked in at compile time via RSG_CERT_DIGEST env var.
     // Empty string = CA-signed cert (no pinning required).
@@ -195,12 +198,13 @@ fn spawn_transport(
         .unwrap_or("")
         .to_string();
 
-    commands.spawn((
+    let entity = commands.spawn((
         Name::new("GameClient"),
         PendingClient,
         WebTransportClientIo { certificate_digest },
         PeerAddr(server_addr),
         netcode_client,
-    ));
+    )).id();
+    commands.trigger(Connect { entity });
     info!("Using WebTransport → https://{}", server_addr);
 }

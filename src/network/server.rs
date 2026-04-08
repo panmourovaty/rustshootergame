@@ -64,13 +64,16 @@ fn spawn_server_entities(mut commands: Commands, ports: Res<ServerPorts>) {
     };
 
     // ── UDP listener (native clients) ────────────────────────────────────────
+    // Spawn the entity then trigger Start — lightyear only binds the socket
+    // once it receives the Start trigger (which fires LinkStart → UdpSocket::bind).
     let udp_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), ports.udp);
-    commands.spawn((
+    let udp_entity = commands.spawn((
         Name::new("GameServerUdp"),
         ServerUdpIo::default(),
         LocalAddr(udp_addr),
         NetcodeServer::new(netcode_config.clone()),
-    ));
+    )).id();
+    commands.trigger(Start { entity: udp_entity });
     info!("UDP listener on {}", udp_addr);
 
     // ── WebTransport listener (browser clients) ───────────────────────────────
@@ -94,14 +97,15 @@ fn spawn_server_entities(mut commands: Commands, ports: Res<ServerPorts>) {
         cert_digest
     );
 
-    commands.spawn((
+    let wt_entity = commands.spawn((
         Name::new("GameServerWebTransport"),
         WebTransportServerIo {
             certificate: identity,
         },
         LocalAddr(wt_addr),
         NetcodeServer::new(netcode_config),
-    ));
+    )).id();
+    commands.trigger(Start { entity: wt_entity });
 }
 
 fn log_client_connections(query: Query<Entity, Added<Connected>>) {
