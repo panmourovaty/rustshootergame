@@ -77,7 +77,7 @@ opt-level = 1
 opt-level = 3
 
 [profile.release]
-opt-level = "s"
+opt-level = 3
 lto = "fat"
 codegen-units = 1
 

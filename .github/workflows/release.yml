@@ -34,47 +34,85 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ── Client — Windows ────────────────────────────────────────────────
+          # ── Client — Windows x86-64 (AVX2) ──────────────────────────────────
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary: client
             artifact_name: client.exe
             asset_name: client-windows-x86_64.exe
+            rustflags: "-C target-feature=+avx,+avx2,+fma"
 
-          # ── Client — Linux x86-64 ───────────────────────────────────────────
+          # ── Client — Linux x86-64 SSE2 baseline (SSE fallback) ──────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: client
             artifact_name: client
             asset_name: client-linux-amd64
+            rustflags: ""
 
-          # ── Client — Linux ARM64 ────────────────────────────────────────────
+          # ── Client — Linux x86-64 AVX2 ──────────────────────────────────────
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: client
+            artifact_name: client
+            asset_name: client-linux-amd64-avx2
+            rustflags: "-C target-feature=+avx,+avx2,+fma"
+
+          # ── Client — Linux ARM64 NEON baseline (NEON fallback) ──────────────
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             binary: client
             artifact_name: client
             asset_name: client-linux-arm64
+            rustflags: ""
 
-          # ── Client — macOS Apple Silicon ────────────────────────────────────
+          # ── Client — Linux ARM64 SVE ─────────────────────────────────────────
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: client
+            artifact_name: client
+            asset_name: client-linux-arm64-sve
+            rustflags: "-C target-feature=+sve,+sve2,+neon"
+
+          # ── Client — macOS Apple Silicon (NEON; no SVE on Apple chips) ───────
           - os: macos-latest
             target: aarch64-apple-darwin
             binary: client
             artifact_name: client
             asset_name: client-macos-arm64
+            rustflags: ""
 
-          # ── Server — Linux x86-64 ───────────────────────────────────────────
+          # ── Server — Linux x86-64 SSE2 baseline ─────────────────────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: server
             artifact_name: server
             asset_name: server-linux-amd64
+            rustflags: ""
 
-          # ── Server — Linux ARM64 ────────────────────────────────────────────
+          # ── Server — Linux x86-64 AVX2 ──────────────────────────────────────
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: server
+            artifact_name: server
+            asset_name: server-linux-amd64-avx2
+            rustflags: "-C target-feature=+avx,+avx2,+fma"
+
+          # ── Server — Linux ARM64 NEON baseline ──────────────────────────────
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             binary: server
             artifact_name: server
             asset_name: server-linux-arm64
+            rustflags: ""
+
+          # ── Server — Linux ARM64 SVE ─────────────────────────────────────────
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: server
+            artifact_name: server
+            asset_name: server-linux-arm64-sve
+            rustflags: "-C target-feature=+sve,+sve2,+neon"
 
     steps:
       - name: Checkout source
@@ -104,6 +142,8 @@ jobs:
             pkg-config
 
       - name: Build release binary
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
         run: >
           cargo build
           --release
@@ -231,17 +271,28 @@ jobs:
           body: |
             Automated build from the `main` branch — commit ${{ github.sha }}.
 
-            | Binary | Platform |
-            |--------|----------|
-            | `client-windows-x86_64.exe` | Windows x86-64 |
-            | `client-linux-amd64` | Linux x86-64 |
-            | `client-linux-arm64` | Linux ARM64 |
-            | `client-macos-arm64` | macOS Apple Silicon |
-            | `client-web.zip` | Browser (WASM) — also live on Cloudflare Pages |
-            | `server-linux-amd64` | Linux x86-64 (headless server) |
-            | `server-linux-arm64` | Linux ARM64 (headless server) |
+            ### Client
+
+            | Binary | Platform | Notes |
+            |--------|----------|-------|
+            | `client-windows-x86_64.exe` | Windows x86-64 | AVX2 + FMA |
+            | `client-linux-amd64` | Linux x86-64 | SSE2 baseline — runs on any x86-64 CPU |
+            | `client-linux-amd64-avx2` | Linux x86-64 | AVX2 + FMA — requires Haswell / Zen 1+ |
+            | `client-linux-arm64` | Linux ARM64 | NEON baseline — runs on any AArch64 |
+            | `client-linux-arm64-sve` | Linux ARM64 | SVE2 + NEON — requires Graviton 3 / Neoverse V1+ |
+            | `client-macos-arm64` | macOS Apple Silicon | NEON (Apple chips do not implement ARM SVE) |
+            | `client-web.zip` | Browser (WASM) | Also live on Cloudflare Pages |
+
+            ### Server
+
+            | Binary | Platform | Notes |
+            |--------|----------|-------|
+            | `server-linux-amd64` | Linux x86-64 | SSE2 baseline |
+            | `server-linux-amd64-avx2` | Linux x86-64 | AVX2 + FMA |
+            | `server-linux-arm64` | Linux ARM64 | NEON baseline |
+            | `server-linux-arm64-sve` | Linux ARM64 | SVE2 + NEON |
           prerelease: true
           allowUpdates: true
           removeArtifacts: true
-          artifacts: "dist/client-*/*, dist/server-*/*, dist/client-web.zip"
+          artifacts: "dist/client-*/*,dist/server-*/*,dist/client-web.zip"
           token: ${{ secrets.GITHUB_TOKEN }}
