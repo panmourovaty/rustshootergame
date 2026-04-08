@@ -200,7 +200,7 @@ jobs:
   # ── GitHub Release (main branch only, rolling "latest") ─────────────────────
   release:
     name: Publish GitHub Release
-    needs: build-native
+    needs: [build-native, build-wasm]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
@@ -209,8 +209,16 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: dist/
-          # Exclude the WASM artefact — it is deployed to Cloudflare Pages.
           pattern: "client-*,server-*"
+
+      - name: Download WASM artefact
+        uses: actions/download-artifact@v8
+        with:
+          path: dist/web-dist/
+          name: web-dist
+
+      - name: Zip WASM web client
+        run: zip -r dist/client-web.zip dist/web-dist/
 
       - name: List artefacts
         run: find dist/ -type f | sort
@@ -229,12 +237,11 @@ jobs:
             | `client-linux-amd64` | Linux x86-64 |
             | `client-linux-arm64` | Linux ARM64 |
             | `client-macos-arm64` | macOS Apple Silicon |
+            | `client-web.zip` | Browser (WASM) — also live on Cloudflare Pages |
             | `server-linux-amd64` | Linux x86-64 (headless server) |
             | `server-linux-arm64` | Linux ARM64 (headless server) |
-
-            The web client is deployed to Cloudflare Pages automatically.
           prerelease: true
           allowUpdates: true
           removeArtifacts: true
-          artifacts: "dist/**/*"
+          artifacts: "dist/client-*/*, dist/server-*/*, dist/client-web.zip"
           token: ${{ secrets.GITHUB_TOKEN }}
