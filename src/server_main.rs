@@ -28,7 +28,7 @@ fn main() {
         // MinimalPlugins does not include StatesPlugin (only DefaultPlugins does).
         // Add it explicitly so the StateTransition schedule exists before
         // insert_state is called.
-        .add_plugins(StatesPlugin)
+        .add_plugins(bevy::state::app::StatesPlugin)
         // Start directly in Loading → Playing; skip ConnectScreen.
         .insert_state(GameState::Loading)
         .add_plugins(avian3d::PhysicsPlugins::default())
