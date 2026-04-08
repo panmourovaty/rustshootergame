@@ -27,11 +27,20 @@ struct GameOverScreen;
 #[derive(Component)]
 struct ReloadingText;
 
+/// Marks the root HUD entity so it can be despawned when leaving Playing.
+#[derive(Component)]
+struct HudRoot;
+
 // ─── Plugin ─────────────────────────────────────────────────────────────────
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_hud);
+        // Spawn HUD only when gameplay starts, not at app startup.
+        // This prevents it from overlapping the connect/connecting screens.
+        app.add_systems(OnEnter(GameState::Playing), spawn_hud);
+        // Despawn HUD when returning to the connect screen (e.g. after game over
+        // or a failed/cancelled connection attempt).
+        app.add_systems(OnEnter(GameState::ConnectScreen), despawn_hud);
         app.add_systems(
             Update,
             (
@@ -54,6 +63,7 @@ fn spawn_hud(mut commands: Commands) {
     commands
         .spawn((
             Name::new("HudRoot"),
+            HudRoot,
             Node {
                 width: Val::Percent(100.0),
                 height: Val::Percent(100.0),
@@ -330,6 +340,12 @@ fn update_kill_feed(
         if entry.timer.is_finished() {
             commands.entity(entity).despawn();
         }
+    }
+}
+
+fn despawn_hud(mut commands: Commands, query: Query<Entity, With<HudRoot>>) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn();
     }
 }
 
