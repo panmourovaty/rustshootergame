@@ -3,6 +3,7 @@ use bevy::window::CursorOptions;
 use avian3d::prelude::*;
 use crate::player::{Health, LocalPlayer, Player};
 use crate::game::KillEvent;
+use crate::pvp::RemotePlayer;
 
 pub struct WeaponPlugin;
 
@@ -45,7 +46,7 @@ pub struct ImpactEffect {
     pub timer: Timer,
 }
 
-// ─── Messages ────────────────────────────────────────────────────────────────
+// ─── Events ──────────────────────────────────────────────────────────────────
 
 /// Fired when the player successfully pulls the trigger.
 #[derive(Message, Clone, Debug)]
@@ -65,12 +66,21 @@ pub struct HitEvent {
     pub hit_point: Vec3,
 }
 
+/// Fired when the local player's shot hits a remote player.
+/// Read by the network client to send a `HitMsg` to the server.
+#[derive(Message, Clone, Debug)]
+pub struct RemoteHitEvent {
+    pub victim_id: u64,
+    pub damage: f32,
+}
+
 // ─── Plugin ─────────────────────────────────────────────────────────────────
 
 impl Plugin for WeaponPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<ShootEvent>();
         app.add_message::<HitEvent>();
+        app.add_message::<RemoteHitEvent>();
         app.add_systems(
             Update,
             (
@@ -167,14 +177,17 @@ fn handle_shooting(
 }
 
 /// Performs the raycast for each `ShootEvent` and spawns an impact spark.
+/// Also detects hits on RemotePlayer entities and fires `RemoteHitEvent`.
 fn process_shoot_events(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut shoot_events: MessageReader<ShootEvent>,
     mut hit_events: MessageWriter<HitEvent>,
+    mut remote_hit_events: MessageWriter<RemoteHitEvent>,
     spatial_query: SpatialQuery,
     health_query: Query<&Health>,
+    remote_player_query: Query<&RemotePlayer>,
 ) {
     for event in shoot_events.read() {
         // Exclude the shooter from the ray so it cannot hit itself.
@@ -190,11 +203,22 @@ fn process_shoot_events(
             true,
             &filter,
         ) {
-            // In avian3d 0.4, the field is `distance` (not `time_of_impact`).
+            // In avian3d 0.5, the field is `distance` (not `time_of_impact`).
             let hit_point = event.origin + *event.direction * hit.distance;
 
-            // Only damage entities that have health.
-            if health_query.get(hit.entity).is_ok() {
+            // Check if the hit entity is a remote player.
+            if let Ok(remote_player) = remote_player_query.get(hit.entity) {
+                remote_hit_events.write(RemoteHitEvent {
+                    victim_id: remote_player.client_id,
+                    damage: event.damage,
+                });
+                info!(
+                    "Remote player {} hit for {:.0} damage",
+                    remote_player.client_id, event.damage
+                );
+            } else if health_query.get(hit.entity).is_ok() {
+                // Local entity with health (e.g. local player if they could
+                // somehow shoot themselves — kept for future use).
                 hit_events.write(HitEvent {
                     shooter_entity: event.shooter,
                     target: hit.entity,

@@ -131,7 +131,7 @@ pub struct PlayerNames(pub HashMap<u64, String>);
 // ─── Events ─────────────────────────────────────────────────────────────────
 
 /// Emitted when a kill is confirmed, so UI and score tracking can react.
-#[derive(Event, Clone, Debug)]
+#[derive(Message, Clone, Debug)]
 pub struct KillEvent {
     pub killer_id: u64,
     pub victim_id: u64,
@@ -147,7 +147,7 @@ impl Plugin for GamePlugin {
         app.init_resource::<PlayerProfile>();
         app.init_resource::<ConnectionError>();
         app.init_resource::<PlayerNames>();
-        app.add_event::<KillEvent>();
+        app.add_message::<KillEvent>();
 
         // Immediately transition out of Loading on entry.
         app.add_systems(
@@ -170,7 +170,7 @@ impl Plugin for GamePlugin {
 
 // ─── Systems ────────────────────────────────────────────────────────────────
 
-pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: EventReader<KillEvent>) {
+pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: MessageReader<KillEvent>) {
     for ev in kill_events.read() {
         scores.add_kill(ev.killer_id);
         scores.add_death(ev.victim_id);

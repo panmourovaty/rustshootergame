@@ -9,6 +9,10 @@
 ///                         When the timer expires, go back to ConnectScreen
 ///                         with a ConnectionError message.
 ///   OnExit(Connecting)  → clean up any pending (not-yet-connected) entity.
+///
+/// Playing state:
+///   OnEnter(Playing)    → send JoinMsg to server.
+///   Update(Playing)     → throttled position updates, read server messages.
 
 use bevy::prelude::*;
 use lightyear::prelude::client::*;
@@ -21,8 +25,17 @@ use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 #[cfg(target_arch = "wasm32")]
 use std::net::SocketAddr;
 
-use super::protocol::PROTOCOL_ID;
+use super::protocol::{
+    GameChannel, HitMsg, JoinMsg, KillNotifyMsg, PlayerJoinMsg, PlayerLeaveMsg,
+    PosChannel, PosUpdateMsg, ProtocolPlugin, RelayedPosMsg, TakeDamageMsg, PROTOCOL_ID,
+};
 use crate::game::{ConnectionError, GameState, PlayerProfile};
+use crate::player::LocalPlayer;
+use crate::pvp::{
+    LocalPlayerDamaged, RemoteKillEvent, RemotePlayerJoined, RemotePlayerLeft,
+    RemotePlayerMoved,
+};
+use crate::weapon::RemoteHitEvent;
 
 fn random_client_id() -> u64 {
     let mut buf = [0u8; 8];
@@ -40,11 +53,26 @@ impl Plugin for ClientNetworkPlugin {
             tick_duration: Duration::from_secs_f64(1.0 / 64.0),
         });
 
+        // Register messages and channels AFTER ClientPlugins.
+        app.add_plugins(ProtocolPlugin);
+
         app.add_systems(OnEnter(GameState::Connecting), start_connecting);
         app.add_systems(OnExit(GameState::Connecting), cleanup_pending_client);
         app.add_systems(
             Update,
             (check_connected, tick_timeout).run_if(in_state(GameState::Connecting)),
+        );
+
+        // Playing-state systems.
+        app.add_systems(OnEnter(GameState::Playing), send_join_msg);
+        app.add_systems(
+            Update,
+            (
+                send_position_updates,
+                process_server_messages,
+                send_remote_hits,
+            )
+                .run_if(in_state(GameState::Playing)),
         );
 
         info!("ClientNetworkPlugin registered");
@@ -62,12 +90,13 @@ struct PendingClient;
 #[derive(Resource)]
 struct ConnectTimeout(Timer);
 
-// ─── Systems ────────────────────────────────────────────────────────────────
+/// Tracks when we last sent a position update (for 50 ms throttle).
+#[derive(Resource, Default)]
+struct PosUpdateTimer(f32);
+
+// ─── Connection systems ──────────────────────────────────────────────────────
 
 fn start_connecting(mut commands: Commands, profile: Res<PlayerProfile>) {
-    // Resolve the address (handles both IPs and domain names on native).
-    // On WASM, to_socket_addrs() works for IP literals; the WebTransport URL
-    // is what actually drives DNS in the browser.
     let addr_str = if profile.server_addr.contains(':') {
         profile.server_addr.clone()
     } else {
@@ -78,7 +107,6 @@ fn start_connecting(mut commands: Commands, profile: Res<PlayerProfile>) {
         Ok(a) => a,
         Err(e) => {
             error!("Cannot resolve '{}': {}", addr_str, e);
-            // The timeout system will fire shortly and surface the error.
             return;
         }
     };
@@ -100,11 +128,10 @@ fn start_connecting(mut commands: Commands, profile: Res<PlayerProfile>) {
         }
     }
 
-    // 15-second connection timeout.
     commands.insert_resource(ConnectTimeout(Timer::from_seconds(15.0, TimerMode::Once)));
+    commands.init_resource::<PosUpdateTimer>();
 }
 
-/// Transition to Playing the frame a Connected component appears.
 fn check_connected(
     query: Query<Entity, (With<PendingClient>, Added<Connected>)>,
     mut next_state: ResMut<NextState<GameState>>,
@@ -115,7 +142,6 @@ fn check_connected(
     }
 }
 
-/// Give up after the timeout and send the player back to the connect screen.
 fn tick_timeout(
     time: Res<Time>,
     mut timer: ResMut<ConnectTimeout>,
@@ -129,7 +155,6 @@ fn tick_timeout(
     }
 }
 
-/// Despawn any pending (unconnected) client entity and remove the timeout.
 fn cleanup_pending_client(
     mut commands: Commands,
     query: Query<(Entity, Option<&Connected>), With<PendingClient>>,
@@ -138,9 +163,162 @@ fn cleanup_pending_client(
         if connected.is_none() {
             commands.entity(entity).despawn();
         }
-        // If already Connected, keep the entity alive for the Playing state.
     }
     commands.remove_resource::<ConnectTimeout>();
+}
+
+// ─── Playing-state systems ───────────────────────────────────────────────────
+
+/// Sends JoinMsg to the server as soon as we enter Playing.
+fn send_join_msg(
+    profile: Res<PlayerProfile>,
+    mut client_query: Query<&mut MessageSender<JoinMsg>, (With<Client>, With<Connected>)>,
+) {
+    let msg = JoinMsg {
+        client_id: profile.client_id,
+        username: profile.username.clone(),
+    };
+
+    for mut sender in client_query.iter_mut() {
+        sender.send::<GameChannel>(msg.clone());
+        info!("Sent JoinMsg: id={} username='{}'", msg.client_id, msg.username);
+    }
+}
+
+/// Sends PosUpdateMsg to the server at ~50 ms intervals (20 Hz).
+fn send_position_updates(
+    time: Res<Time>,
+    mut timer: ResMut<PosUpdateTimer>,
+    profile: Res<PlayerProfile>,
+    player_query: Query<(&Transform, &crate::player::FpsController), With<LocalPlayer>>,
+    mut client_query: Query<&mut MessageSender<PosUpdateMsg>, (With<Client>, With<Connected>)>,
+) {
+    timer.0 += time.delta_secs();
+    if timer.0 < 0.05 {
+        return;
+    }
+    timer.0 = 0.0;
+
+    let Ok((transform, controller)) = player_query.single() else {
+        return;
+    };
+    let pos = transform.translation;
+    let yaw = controller.yaw;
+
+    let msg = PosUpdateMsg {
+        pos: [pos.x, pos.y, pos.z],
+        yaw,
+    };
+
+    for mut sender in client_query.iter_mut() {
+        sender.send::<PosChannel>(msg.clone());
+    }
+    let _ = profile; // profile.client_id unused here; server knows who sent it
+}
+
+/// Reads all server messages and fires the appropriate Bevy events.
+fn process_server_messages(
+    profile: Res<PlayerProfile>,
+    mut client_query: Query<
+        (
+            &mut MessageReceiver<PlayerJoinMsg>,
+            &mut MessageReceiver<PlayerLeaveMsg>,
+            &mut MessageReceiver<RelayedPosMsg>,
+            &mut MessageReceiver<TakeDamageMsg>,
+            &mut MessageReceiver<KillNotifyMsg>,
+        ),
+        (With<Client>, With<Connected>),
+    >,
+    mut joined_events: MessageWriter<RemotePlayerJoined>,
+    mut left_events: MessageWriter<RemotePlayerLeft>,
+    mut moved_events: MessageWriter<RemotePlayerMoved>,
+    mut damaged_events: MessageWriter<LocalPlayerDamaged>,
+    mut kill_events: MessageWriter<RemoteKillEvent>,
+) {
+    for (
+        mut join_rx,
+        mut leave_rx,
+        mut pos_rx,
+        mut damage_rx,
+        mut kill_rx,
+    ) in client_query.iter_mut()
+    {
+        // PlayerJoinMsg
+        for msg in join_rx.receive() {
+            info!(
+                "Server: player '{}' (id={}) joined",
+                msg.username, msg.client_id
+            );
+            joined_events.write(RemotePlayerJoined {
+                client_id: msg.client_id,
+                username: msg.username.clone(),
+                color: msg.color,
+            });
+        }
+
+        // PlayerLeaveMsg
+        for msg in leave_rx.receive() {
+            info!("Server: player id={} left", msg.client_id);
+            left_events.write(RemotePlayerLeft {
+                client_id: msg.client_id,
+            });
+        }
+
+        // RelayedPosMsg — skip our own updates to avoid overwriting local transform.
+        for msg in pos_rx.receive() {
+            if msg.client_id == profile.client_id {
+                continue;
+            }
+            moved_events.write(RemotePlayerMoved {
+                client_id: msg.client_id,
+                pos: Vec3::from(msg.pos),
+                yaw: msg.yaw,
+            });
+        }
+
+        // TakeDamageMsg
+        for msg in damage_rx.receive() {
+            info!("Server: our HP is now {:.0}", msg.new_hp);
+            damaged_events.write(LocalPlayerDamaged { new_hp: msg.new_hp });
+        }
+
+        // KillNotifyMsg
+        for msg in kill_rx.receive() {
+            info!(
+                "Server: kill confirmed — {} killed {}",
+                msg.killer_id, msg.victim_id
+            );
+            kill_events.write(RemoteKillEvent {
+                killer_id: msg.killer_id,
+                victim_id: msg.victim_id,
+            });
+        }
+    }
+}
+
+/// Reads `RemoteHitEvent` (fired by weapon.rs when local player hits a remote
+/// player) and sends `HitMsg` to the server for authoritative damage processing.
+fn send_remote_hits(
+    profile: Res<PlayerProfile>,
+    mut hit_events: MessageReader<RemoteHitEvent>,
+    mut client_query: Query<&mut MessageSender<HitMsg>, (With<Client>, With<Connected>)>,
+) {
+    for ev in hit_events.read() {
+        let msg = HitMsg {
+            killer_id: profile.client_id,
+            victim_id: ev.victim_id,
+            damage: ev.damage,
+        };
+
+        for mut sender in client_query.iter_mut() {
+            sender.send::<GameChannel>(msg.clone());
+        }
+
+        info!(
+            "Sent HitMsg: killer={} victim={} damage={:.0}",
+            msg.killer_id, msg.victim_id, msg.damage
+        );
+    }
 }
 
 // ─── Address resolution ──────────────────────────────────────────────────────
@@ -178,7 +356,6 @@ fn spawn_transport(
         LocalAddr(local_addr),
         netcode_client,
     )).id();
-    // lightyear only initiates the handshake once it receives the Connect trigger.
     commands.trigger(Connect { entity });
     info!("Using UDP transport → {}", server_addr);
 }
@@ -198,8 +375,6 @@ fn spawn_transport(
 ) {
     use lightyear::prelude::client::{Connect, WebTransportClientIo};
 
-    // Cert digest baked in at compile time via RSG_CERT_DIGEST env var.
-    // Empty string = CA-signed cert (no pinning required).
     let certificate_digest = option_env!("RSG_CERT_DIGEST")
         .unwrap_or("")
         .to_string();

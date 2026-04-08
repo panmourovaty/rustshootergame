@@ -7,6 +7,7 @@ mod game;
 mod map;
 mod network;
 mod player;
+mod pvp;
 mod ui;
 mod weapon;
 
@@ -14,6 +15,7 @@ use connect_screen::ConnectScreenPlugin;
 use game::{GamePlugin, GameState};
 use map::MapPlugin;
 use player::PlayerPlugin;
+use pvp::PvpPlugin;
 use ui::UiPlugin;
 use weapon::WeaponPlugin;
 
@@ -44,6 +46,7 @@ fn main() {
         .add_plugins(MapPlugin)
         .add_plugins(PlayerPlugin)
         .add_plugins(WeaponPlugin)
+        .add_plugins(PvpPlugin)
         .add_plugins(UiPlugin)
         .add_plugins(network::client::ClientNetworkPlugin)
         .run();

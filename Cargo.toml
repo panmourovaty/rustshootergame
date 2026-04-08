@@ -16,6 +16,8 @@ path = "src/server_main.rs"
 [features]
 default = ["networking"]
 # Native builds: UDP + WebTransport (server listens on both; native client uses UDP).
+# Use the `server` feature for server-only builds (omits client game logic modules).
+server = ["networking"]
 networking = [
     "dep:lightyear",
     "dep:aeronet_webtransport",

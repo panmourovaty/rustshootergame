@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use crate::game::{GameState, KillEvent, Scores};
+use crate::game::{GameState, KillEvent, PlayerNames, Scores};
 use crate::player::{Health, LocalPlayer};
 use crate::weapon::Weapon;
 
@@ -35,11 +35,9 @@ struct HudRoot;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        // Spawn HUD only when gameplay starts, not at app startup.
-        // This prevents it from overlapping the connect/connecting screens.
+        // Spawn HUD only when gameplay starts.
         app.add_systems(OnEnter(GameState::Playing), spawn_hud);
-        // Despawn HUD when returning to the connect screen (e.g. after game over
-        // or a failed/cancelled connection attempt).
+        // Despawn HUD when returning to the connect screen.
         app.add_systems(OnEnter(GameState::ConnectScreen), despawn_hud);
         app.add_systems(
             Update,
@@ -244,6 +242,8 @@ fn spawn_kill_feed(parent: &mut ChildSpawnerCommands) {
 
 // ─── Update systems ──────────────────────────────────────────────────────────
 
+/// Reads `Health` from the `LocalPlayer` entity (set directly by pvp.rs when
+/// the server reports damage, or by weapon.rs for local hit resolution).
 fn update_health_text(
     player_query: Query<&Health, With<LocalPlayer>>,
     mut text_query: Query<&mut Text, With<HealthText>>,
@@ -291,22 +291,35 @@ fn update_reloading_text(
     }
 }
 
-/// Adds a new entry to the kill feed whenever a kill event fires.
+/// Adds a new entry to the kill feed whenever a `KillEvent` fires.
+/// Uses `PlayerNames` to display friendly names when available.
 fn append_kill_feed_entries(
     mut commands: Commands,
     mut kill_events: MessageReader<KillEvent>,
     feed_query: Query<Entity, With<KillFeedRoot>>,
     scores: Res<Scores>,
+    player_names: Res<PlayerNames>,
 ) {
     let Ok(feed_entity) = feed_query.single() else {
         return;
     };
 
     for ev in kill_events.read() {
+        let killer_name = player_names
+            .0
+            .get(&ev.killer_id)
+            .cloned()
+            .unwrap_or_else(|| format!("{}", ev.killer_id & 0xFFFF));
+        let victim_name = player_names
+            .0
+            .get(&ev.victim_id)
+            .cloned()
+            .unwrap_or_else(|| format!("{}", ev.victim_id & 0xFFFF));
+
         let killer_kills = scores.get_kills(ev.killer_id);
         let msg = format!(
-            "Player {} eliminated Player {} [{} kills]",
-            ev.killer_id, ev.victim_id, killer_kills
+            "{} eliminated {} [{} kills]",
+            killer_name, victim_name, killer_kills
         );
 
         let entry = commands
@@ -351,13 +364,23 @@ fn despawn_hud(mut commands: Commands, query: Query<Entity, With<HudRoot>>) {
 
 // ─── Game-over overlay ───────────────────────────────────────────────────────
 
-fn show_game_over_screen(mut commands: Commands, scores: Res<Scores>) {
+fn show_game_over_screen(
+    mut commands: Commands,
+    scores: Res<Scores>,
+    player_names: Res<PlayerNames>,
+) {
     let (winner_id, winner_kills) = scores
         .kills
         .iter()
         .max_by_key(|(_, &k)| k)
         .map(|(&id, &k)| (id, k))
         .unwrap_or((0, 0));
+
+    let winner_name = player_names
+        .0
+        .get(&winner_id)
+        .cloned()
+        .unwrap_or_else(|| format!("{}", winner_id & 0xFFFF));
 
     commands
         .spawn((
@@ -386,8 +409,8 @@ fn show_game_over_screen(mut commands: Commands, scores: Res<Scores>) {
             ));
             parent.spawn((
                 Text::new(format!(
-                    "Player {} wins with {} kills!",
-                    winner_id, winner_kills
+                    "{} wins with {} kills!",
+                    winner_name, winner_kills
                 )),
                 TextFont {
                     font_size: 32.0,
@@ -411,7 +434,6 @@ fn hide_game_over_screen(
     query: Query<Entity, With<GameOverScreen>>,
 ) {
     for entity in query.iter() {
-        // In Bevy 0.17, despawn() automatically despawns all descendants.
         commands.entity(entity).despawn();
     }
 }

@@ -14,8 +14,13 @@ pub mod protocol;
 #[cfg(feature = "networking")]
 pub mod server;
 
-// Client exists for both native and WASM.
-#[cfg(any(feature = "networking", feature = "web"))]
+// Client exists for native (non-server) and WASM builds.
+// Excluded when building with `--features server` so that the server binary
+// doesn't need to compile client-side game modules (pvp, weapon, etc.).
+#[cfg(any(
+    all(feature = "networking", not(feature = "server")),
+    feature = "web"
+))]
 pub mod client;
 
 // ── Stubs when all networking is disabled ────────────────────────────────────

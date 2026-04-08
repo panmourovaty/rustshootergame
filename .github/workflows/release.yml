@@ -149,6 +149,7 @@ jobs:
           --release
           --target ${{ matrix.target }}
           --bin ${{ matrix.binary }}
+          ${{ matrix.binary == 'server' && '--no-default-features --features server' || '' }}
 
       - name: Rename binary (Unix)
         if: runner.os != 'Windows'
