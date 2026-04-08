@@ -37,6 +37,8 @@ pub struct PlayerProfile {
     /// True when `RSG_SERVER_ADDR` env var was set at launch; hides the IP field
     /// on the connect screen so users cannot change it.
     pub server_addr_locked: bool,
+    /// Stable random ID generated once at startup and used as the network identity.
+    pub client_id: u64,
 }
 
 impl Default for PlayerProfile {
@@ -46,8 +48,15 @@ impl Default for PlayerProfile {
             username: String::new(),
             server_addr,
             server_addr_locked,
+            client_id: generate_client_id(),
         }
     }
+}
+
+fn generate_client_id() -> u64 {
+    let mut buf = [0u8; 8];
+    getrandom::getrandom(&mut buf).expect("getrandom failed");
+    u64::from_le_bytes(buf)
 }
 
 /// Native: reads `RSG_SERVER_ADDR` environment variable.
@@ -93,35 +102,39 @@ impl Default for GameConfig {
 
 #[derive(Resource, Default)]
 pub struct Scores {
-    pub kills: HashMap<u32, u32>,
-    pub deaths: HashMap<u32, u32>,
+    pub kills: HashMap<u64, u32>,
+    pub deaths: HashMap<u64, u32>,
 }
 
 impl Scores {
-    pub fn add_kill(&mut self, player_id: u32) {
+    pub fn add_kill(&mut self, player_id: u64) {
         *self.kills.entry(player_id).or_insert(0) += 1;
     }
 
-    pub fn add_death(&mut self, player_id: u32) {
+    pub fn add_death(&mut self, player_id: u64) {
         *self.deaths.entry(player_id).or_insert(0) += 1;
     }
 
-    pub fn get_kills(&self, player_id: u32) -> u32 {
+    pub fn get_kills(&self, player_id: u64) -> u32 {
         *self.kills.get(&player_id).unwrap_or(&0)
     }
 
-    pub fn get_deaths(&self, player_id: u32) -> u32 {
+    pub fn get_deaths(&self, player_id: u64) -> u32 {
         *self.deaths.get(&player_id).unwrap_or(&0)
     }
 }
 
+/// Maps network client_id → display username.
+#[derive(Resource, Default)]
+pub struct PlayerNames(pub HashMap<u64, String>);
+
 // ─── Events ─────────────────────────────────────────────────────────────────
 
 /// Emitted when a kill is confirmed, so UI and score tracking can react.
-#[derive(Message, Clone, Debug)]
+#[derive(Event, Clone, Debug)]
 pub struct KillEvent {
-    pub killer_id: u32,
-    pub victim_id: u32,
+    pub killer_id: u64,
+    pub victim_id: u64,
 }
 
 // ─── Plugin ─────────────────────────────────────────────────────────────────
@@ -133,7 +146,8 @@ impl Plugin for GamePlugin {
         app.init_resource::<Scores>();
         app.init_resource::<PlayerProfile>();
         app.init_resource::<ConnectionError>();
-        app.add_message::<KillEvent>();
+        app.init_resource::<PlayerNames>();
+        app.add_event::<KillEvent>();
 
         // Immediately transition out of Loading on entry.
         app.add_systems(
@@ -156,7 +170,7 @@ impl Plugin for GamePlugin {
 
 // ─── Systems ────────────────────────────────────────────────────────────────
 
-pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: MessageReader<KillEvent>) {
+pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: EventReader<KillEvent>) {
     for ev in kill_events.read() {
         scores.add_kill(ev.killer_id);
         scores.add_death(ev.victim_id);

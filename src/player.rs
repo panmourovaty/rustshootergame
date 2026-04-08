@@ -2,7 +2,7 @@ use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use avian3d::prelude::*;
-use crate::game::GameState;
+use crate::game::{GameState, PlayerProfile};
 use crate::map::SpawnPoints;
 use crate::weapon::Weapon;
 
@@ -17,7 +17,7 @@ pub struct LocalPlayer;
 /// Generic player identification — used for scoring and networking.
 #[derive(Component, Clone)]
 pub struct Player {
-    pub id: u32,
+    pub id: u64,
 }
 
 /// Hit-point component shared by all damage-able entities.
@@ -101,14 +101,26 @@ impl Plugin for PlayerPlugin {
 
 // ─── Systems ────────────────────────────────────────────────────────────────
 
+fn pick_spawn_point(spawn_points: &SpawnPoints) -> Vec3 {
+    let points = &spawn_points.0;
+    if points.is_empty() {
+        return Vec3::new(0.0, 1.0, 0.0);
+    }
+    let mut buf = [0u8; 8];
+    getrandom::getrandom(&mut buf).unwrap_or(());
+    let idx = u64::from_le_bytes(buf) as usize % points.len();
+    points[idx]
+}
+
 /// Spawns the local player's physics body and attaches the camera as a child.
 pub fn spawn_local_player(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     spawn_points: Res<SpawnPoints>,
+    profile: Res<PlayerProfile>,
 ) {
-    let spawn_pos = spawn_points.0[0];
+    let spawn_pos = pick_spawn_point(&spawn_points);
 
     // Gun meshes — created here, then moved into the camera child closure.
     let gun_body_mesh = meshes.add(Cuboid::new(0.04, 0.08, 0.35));
@@ -142,7 +154,7 @@ pub fn spawn_local_player(
             GravityScale(2.0),
             FpsController::default(),
             LocalPlayer,
-            Player { id: 0 },
+            Player { id: profile.client_id },
             Health::default(),
             Weapon::default(),
         ))
@@ -210,7 +222,7 @@ fn manage_cursor(
 /// Reads mouse delta and updates yaw/pitch, then applies them to the body and
 /// camera transforms.  Yaw rotates the whole body; pitch only tilts the camera.
 fn fps_look(
-    mut motion_events: MessageReader<MouseMotion>,
+    mut motion_events: EventReader<MouseMotion>,
     mut player_query: Query<(&mut FpsController, &mut Transform), With<LocalPlayer>>,
     mut camera_query: Query<&mut Transform, (With<PlayerCamera>, Without<LocalPlayer>)>,
 ) {
@@ -316,7 +328,7 @@ fn fps_move(
     vel.0 = Vec3::new(new_xz.x, new_y, new_xz.z);
 }
 
-/// Teleports the local player back to spawn when health reaches zero.
+/// Teleports the local player back to a random spawn when health reaches zero.
 fn handle_respawn(
     mut query: Query<(&mut Health, &mut Transform, &mut LinearVelocity), With<LocalPlayer>>,
     spawn_points: Res<SpawnPoints>,
@@ -324,9 +336,10 @@ fn handle_respawn(
     for (mut health, mut transform, mut velocity) in query.iter_mut() {
         if health.current <= 0.0 {
             health.current = health.max;
-            transform.translation = spawn_points.0[0];
+            let respawn = pick_spawn_point(&spawn_points);
+            transform.translation = respawn;
             *velocity = LinearVelocity::default();
-            info!("Player respawned at {:?}.", spawn_points.0[0]);
+            info!("Player respawned at {:?}.", respawn);
         }
     }
 }
