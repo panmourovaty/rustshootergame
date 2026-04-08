@@ -12,9 +12,12 @@ use map::MapPlugin;
 #[derive(Parser, Debug)]
 #[command(name = "server", about = "RustShooter dedicated server")]
 struct Args {
-    /// UDP port to listen on.
+    /// UDP port for native clients.
     #[arg(long, default_value_t = 7777)]
     port: u16,
+    /// WebTransport port for browser (WASM) clients.
+    #[arg(long, default_value_t = 7778)]
+    web_port: u16,
 }
 
 fn main() {
@@ -29,6 +32,6 @@ fn main() {
         .add_plugins(avian3d::PhysicsPlugins::default())
         .add_plugins(GamePlugin)
         .add_plugins(MapPlugin)
-        .add_plugins(network::server::ServerNetworkPlugin { port: args.port })
+        .add_plugins(network::server::ServerNetworkPlugin { port: args.port, web_port: args.web_port })
         .run();
 }

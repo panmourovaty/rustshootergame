@@ -15,28 +15,49 @@ path = "src/server_main.rs"
 
 [features]
 default = ["networking"]
-networking = ["dep:lightyear"]
-# WASM / web build: enables WebGL 2 rendering, disables networking (UDP is not
-# available in browsers).  Build with:
+# Native builds: UDP + WebTransport (server listens on both; native client uses UDP).
+networking = [
+    "dep:lightyear",
+    "dep:aeronet_webtransport",
+    "lightyear/udp",
+    "lightyear/webtransport",
+    "lightyear/webtransport_self_signed",
+    "lightyear/client",
+    "lightyear/server",
+    "lightyear/netcode",
+]
+# WASM / web build: WebTransport only (no UDP, no server).
+# Build with:
 #   cargo build --target wasm32-unknown-unknown --bin client \
 #               --no-default-features --features web --release
+#
+# Required environment variables for the WASM build:
+#   RSG_CERT_DIGEST   SHA-256 fingerprint of the server's self-signed cert
+#                     (printed by the server on startup). Leave unset when
+#                     using a CA-signed certificate.
 web = [
     "bevy/webgl2",
     "bevy/3d",
     "bevy/mouse",
     "bevy/keyboard",
     "bevy/default_font",
+    "dep:lightyear",
+    "lightyear/webtransport",
+    "lightyear/webtransport_self_signed",
+    "lightyear/client",
+    "lightyear/netcode",
 ]
 
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = [
-    "3d",         # full 3D: rendering, lighting, audio, UI, state, logging, winit
-    "mouse",      # Bevy 0.18: mouse input is an explicit feature
-    "keyboard",   # Bevy 0.18: keyboard input is an explicit feature
+    "3d",
+    "mouse",
+    "keyboard",
     "default_font",
 ] }
 avian3d = "0.5"
-lightyear = { version = "0.26", features = ["udp", "client", "server", "netcode"], optional = true }
+lightyear = { version = "0.26", optional = true }
+aeronet_webtransport = { version = "0.19", optional = true }
 serde = { version = "1", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
 

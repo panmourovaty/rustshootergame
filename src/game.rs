@@ -10,11 +10,21 @@ pub enum GameState {
     /// Initial state — client shows connect screen; server skips straight to Loading.
     #[default]
     ConnectScreen,
+    /// Network handshake in progress; transitions to Playing on success or back
+    /// to ConnectScreen on timeout/cancel.
+    Connecting,
     /// Brief transitional state; immediately advances to Playing.
     Loading,
     Playing,
     GameOver,
 }
+
+// ─── Connection error ────────────────────────────────────────────────────────
+
+/// Populated by the network plugin when a connection attempt fails.
+/// The connect screen reads this on re-entry and shows the message.
+#[derive(Resource, Default)]
+pub struct ConnectionError(pub Option<String>);
 
 // ─── Player profile ──────────────────────────────────────────────────────────
 
@@ -98,6 +108,7 @@ impl Plugin for GamePlugin {
         app.init_resource::<GameConfig>();
         app.init_resource::<Scores>();
         app.init_resource::<PlayerProfile>();
+        app.init_resource::<ConnectionError>();
         app.add_message::<KillEvent>();
 
         // Immediately transition out of Loading on entry.

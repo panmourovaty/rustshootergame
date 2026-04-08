@@ -1,7 +1,7 @@
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::prelude::*;
-use crate::game::{GameState, PlayerProfile};
+use crate::game::{ConnectionError, GameState, PlayerProfile};
 
 pub struct ConnectScreenPlugin;
 
@@ -29,6 +29,17 @@ struct ConnectButton;
 #[derive(Component)]
 struct ErrorText;
 
+// ─── Connecting overlay components ──────────────────────────────────────────
+
+#[derive(Component)]
+struct ConnectingScreenRoot;
+
+#[derive(Component)]
+struct ConnectingScreenCamera;
+
+#[derive(Component)]
+struct CancelButton;
+
 // ─── Resources ──────────────────────────────────────────────────────────────
 
 #[derive(Resource, Default)]
@@ -39,6 +50,8 @@ struct FocusedField(Option<InputField>);
 impl Plugin for ConnectScreenPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<FocusedField>();
+
+        // Connect screen
         app.add_systems(OnEnter(GameState::ConnectScreen), spawn_connect_screen);
         app.add_systems(OnExit(GameState::ConnectScreen), despawn_connect_screen);
         app.add_systems(
@@ -52,12 +65,24 @@ impl Plugin for ConnectScreenPlugin {
             )
                 .run_if(in_state(GameState::ConnectScreen)),
         );
+
+        // Connecting overlay
+        app.add_systems(OnEnter(GameState::Connecting), spawn_connecting_screen);
+        app.add_systems(OnExit(GameState::Connecting), despawn_connecting_screen);
+        app.add_systems(
+            Update,
+            handle_cancel_button.run_if(in_state(GameState::Connecting)),
+        );
     }
 }
 
-// ─── Spawn ───────────────────────────────────────────────────────────────────
+// ─── Connect screen spawn/despawn ────────────────────────────────────────────
 
-fn spawn_connect_screen(mut commands: Commands, profile: Res<PlayerProfile>) {
+fn spawn_connect_screen(
+    mut commands: Commands,
+    profile: Res<PlayerProfile>,
+    conn_error: Res<ConnectionError>,
+) {
     commands.spawn((
         Name::new("ConnectScreenCamera"),
         ConnectScreenCamera,
@@ -132,7 +157,7 @@ fn spawn_connect_screen(mut commands: Commands, profile: Res<PlayerProfile>) {
                         ));
                     });
 
-                // ── Server address (hidden when SERVER_ADDR env var is set) ────
+                // ── Server address (hidden when RSG_SERVER_ADDR env var is set) ─
                 if !profile.server_addr_locked {
                     panel.spawn((
                         Text::new("Server Address"),
@@ -165,9 +190,10 @@ fn spawn_connect_screen(mut commands: Commands, profile: Res<PlayerProfile>) {
                 }
 
                 // ── Error line ─────────────────────────────────────────────────
+                let error_msg = conn_error.0.clone().unwrap_or_default();
                 panel.spawn((
                     Name::new("ErrorText"),
-                    Text::new(""),
+                    Text::new(error_msg),
                     TextFont { font_size: 14.0, ..default() },
                     TextColor(Color::srgb(1.0, 0.30, 0.30)),
                     Node { min_height: Val::Px(18.0), ..default() },
@@ -217,6 +243,91 @@ fn despawn_connect_screen(
     mut commands: Commands,
     root_query: Query<Entity, With<ConnectScreenRoot>>,
     camera_query: Query<Entity, With<ConnectScreenCamera>>,
+) {
+    for entity in root_query.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in camera_query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+// ─── Connecting overlay spawn/despawn ────────────────────────────────────────
+
+fn spawn_connecting_screen(mut commands: Commands, profile: Res<PlayerProfile>) {
+    commands.spawn((
+        Name::new("ConnectingScreenCamera"),
+        ConnectingScreenCamera,
+        Camera2d,
+    ));
+
+    commands
+        .spawn((
+            Name::new("ConnectingScreenRoot"),
+            ConnectingScreenRoot,
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.04, 0.04, 0.10)),
+        ))
+        .with_children(|root| {
+            root.spawn((
+                Name::new("ConnectingPanel"),
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    padding: UiRect::all(Val::Px(48.0)),
+                    row_gap: Val::Px(20.0),
+                    min_width: Val::Px(380.0),
+                    ..default()
+                },
+                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.88)),
+            ))
+            .with_children(|panel| {
+                panel.spawn((
+                    Text::new("Connecting…"),
+                    TextFont { font_size: 32.0, ..default() },
+                    TextColor(Color::WHITE),
+                ));
+                panel.spawn((
+                    Text::new(format!("→ {}", profile.server_addr)),
+                    TextFont { font_size: 18.0, ..default() },
+                    TextColor(Color::srgb(0.6, 0.6, 0.6)),
+                ));
+                // Cancel button
+                panel
+                    .spawn((
+                        Name::new("CancelButton"),
+                        Button,
+                        CancelButton,
+                        Node {
+                            padding: UiRect::axes(Val::Px(32.0), Val::Px(10.0)),
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            margin: UiRect::top(Val::Px(12.0)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::srgb(0.40, 0.10, 0.10)),
+                    ))
+                    .with_children(|btn| {
+                        btn.spawn((
+                            Text::new("Cancel"),
+                            TextFont { font_size: 20.0, ..default() },
+                            TextColor(Color::WHITE),
+                        ));
+                    });
+            });
+        });
+}
+
+fn despawn_connecting_screen(
+    mut commands: Commands,
+    root_query: Query<Entity, With<ConnectingScreenRoot>>,
+    camera_query: Query<Entity, With<ConnectingScreenCamera>>,
 ) {
     for entity in root_query.iter() {
         commands.entity(entity).despawn();
@@ -306,6 +417,7 @@ fn handle_connect_button(
     mut profile: ResMut<PlayerProfile>,
     mut next_state: ResMut<NextState<GameState>>,
     mut error_query: Query<&mut Text, With<ErrorText>>,
+    mut conn_error: ResMut<ConnectionError>,
 ) {
     let mut try_connect = keys.just_pressed(KeyCode::Enter);
     for interaction in interaction_query.iter() {
@@ -342,6 +454,21 @@ fn handle_connect_button(
     }
     profile.server_addr = addr;
 
+    // Clear any previous connection error and begin the connection attempt.
+    conn_error.0 = None;
     **error_text = String::new();
-    next_state.set(GameState::Loading);
+    next_state.set(GameState::Connecting);
+}
+
+fn handle_cancel_button(
+    interaction_query: Query<&Interaction, (Changed<Interaction>, With<CancelButton>)>,
+    mut next_state: ResMut<NextState<GameState>>,
+    mut conn_error: ResMut<ConnectionError>,
+) {
+    for interaction in interaction_query.iter() {
+        if *interaction == Interaction::Pressed {
+            conn_error.0 = Some("Connection cancelled.".to_string());
+            next_state.set(GameState::ConnectScreen);
+        }
+    }
 }
