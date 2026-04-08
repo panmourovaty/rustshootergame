@@ -57,6 +57,22 @@
   <script type="module">
     import init from './client.js';
 
+    // Load server.txt — if present and non-empty, the in-game server address
+    // field is hidden and this value is used directly (like RSG_SERVER_ADDR on
+    // native builds).  A 404 or empty file simply shows the address field.
+    try {
+      const res = await fetch('./server.txt');
+      if (res.ok) {
+        const addr = (await res.text()).trim();
+        if (addr) {
+          window.__RSG_SERVER_ADDR__ = addr;
+          console.log('[RSG] server address locked to', addr);
+        }
+      }
+    } catch (_) {
+      // Network error or file absent — ignore, address field will be shown.
+    }
+
     try {
       await init();
     } catch (e) {

@@ -223,8 +223,10 @@ jobs:
             web-dist/client_bg.wasm \
             -o web-dist/client_bg.wasm
 
-      - name: Copy HTML
-        run: cp web/index.html web-dist/index.html
+      - name: Copy static web assets
+        run: |
+          cp web/index.html web-dist/index.html
+          cp web/server.txt web-dist/server.txt
 
       - name: Upload WASM artefact
         uses: actions/upload-artifact@v7

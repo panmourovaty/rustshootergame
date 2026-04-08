@@ -41,16 +41,40 @@ pub struct PlayerProfile {
 
 impl Default for PlayerProfile {
     fn default() -> Self {
-        let (server_addr, server_addr_locked) =
-            match std::env::var("RSG_SERVER_ADDR") {
-                Ok(val) if !val.is_empty() => (val, true),
-                _ => ("127.0.0.1:7777".to_string(), false),
-            };
+        let (server_addr, server_addr_locked) = resolve_server_addr();
         Self {
             username: String::new(),
             server_addr,
             server_addr_locked,
         }
+    }
+}
+
+/// Native: reads `RSG_SERVER_ADDR` environment variable.
+#[cfg(not(target_arch = "wasm32"))]
+fn resolve_server_addr() -> (String, bool) {
+    match std::env::var("RSG_SERVER_ADDR") {
+        Ok(val) if !val.is_empty() => (val, true),
+        _ => ("127.0.0.1:7777".to_string(), false),
+    }
+}
+
+/// WASM: reads `window.__RSG_SERVER_ADDR__` injected by index.html from server.txt.
+/// Falls back to showing the address field if the file was absent or empty.
+#[cfg(target_arch = "wasm32")]
+fn resolve_server_addr() -> (String, bool) {
+    let addr = js_sys::Reflect::get(
+        &js_sys::global(),
+        &wasm_bindgen::JsValue::from_str("__RSG_SERVER_ADDR__"),
+    )
+    .ok()
+    .and_then(|v| v.as_string())
+    .map(|s| s.trim().to_string())
+    .filter(|s| !s.is_empty());
+
+    match addr {
+        Some(a) => (a, true),
+        None => ("127.0.0.1:7778".to_string(), false),
     }
 }
 

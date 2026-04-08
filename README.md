@@ -205,11 +205,26 @@ The `client-web.zip` in every release is also deployed automatically to **Cloudf
 
 For a persistent server you should build the WASM yourself (see [§7.3](#73-wasm-client)).
 
+### Locking the server address (server.txt)
+
+`client-web.zip` includes a `server.txt` file. Edit it to contain your server's
+address before deploying — the browser client reads it at page load and hides
+the address field, exactly like `RSG_SERVER_ADDR` on native builds:
+
+```
+# web/server.txt
+192.168.1.10:7778
+```
+
+Leave the file empty (the default) to show the address field so players can type
+their own server address.
+
 ### Playing in the browser
 
-1. Extract `client-web.zip` and serve it with any static web server that supports HTTPS and HTTP/3 (required by WebTransport).
-2. Open the URL in Chrome or Edge (Firefox does not yet support WebTransport over self-signed certs).
-3. Enter your username and click **CONNECT**. The server address field shows the address baked into the build.
+1. Extract `client-web.zip`. Edit `server.txt` if desired (see above).
+2. Serve the directory with any static web server that supports HTTPS and HTTP/3 (required by WebTransport).
+3. Open the URL in Chrome or Edge (Firefox does not yet support WebTransport over self-signed certs).
+4. Enter your username and click **CONNECT**.
 
 ---
 
