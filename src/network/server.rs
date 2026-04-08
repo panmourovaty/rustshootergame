@@ -49,9 +49,9 @@ impl Plugin for ServerNetworkPlugin {
 // ─── Resources ──────────────────────────────────────────────────────────────
 
 #[derive(Resource)]
-struct ServerPorts {
-    udp: u16,
-    web: u16,
+pub struct ServerPorts {
+    pub udp: u16,
+    pub web: u16,
 }
 
 // ─── Systems ────────────────────────────────────────────────────────────────

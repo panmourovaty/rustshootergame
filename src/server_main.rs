@@ -9,6 +9,15 @@ mod network;
 use game::{GamePlugin, GameState};
 use map::MapPlugin;
 
+fn print_startup_banner(ports: Res<network::server::ServerPorts>) {
+    info!("===========================================");
+    info!(" RustShooter dedicated server is running  ");
+    info!("===========================================");
+    info!(" UDP  (native clients)  : 0.0.0.0:{}", ports.udp);
+    info!(" WebTransport (browser) : 0.0.0.0:{}", ports.web);
+    info!("===========================================");
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "server", about = "RustShooter dedicated server")]
 struct Args {
@@ -25,6 +34,8 @@ fn main() {
 
     App::new()
         .add_plugins(MinimalPlugins)
+        // MinimalPlugins omits LogPlugin — add it so info!/warn!/error! work.
+        .add_plugins(bevy::log::LogPlugin::default())
         // MinimalPlugins does not include StatesPlugin (only DefaultPlugins does).
         // Add it explicitly so the StateTransition schedule exists before
         // insert_state is called.
@@ -35,5 +46,6 @@ fn main() {
         .add_plugins(GamePlugin)
         .add_plugins(MapPlugin)
         .add_plugins(network::server::ServerNetworkPlugin { port: args.port, web_port: args.web_port })
+        .add_systems(Startup, print_startup_banner)
         .run();
 }

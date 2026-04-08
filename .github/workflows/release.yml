@@ -34,13 +34,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ── Client — Windows x86-64 (AVX2) ──────────────────────────────────
+          # ── Client — Windows x86-64 (x86-64-v3) ─────────────────────────────
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary: client
             artifact_name: client.exe
             asset_name: client-windows-x86_64.exe
-            rustflags: "-C target-feature=+avx,+avx2,+fma"
+            rustflags: "-C target-cpu=x86-64-v3"
 
           # ── Client — Linux x86-64 SSE2 baseline (SSE fallback) ──────────────
           - os: ubuntu-latest
@@ -50,13 +50,13 @@ jobs:
             asset_name: client-linux-amd64
             rustflags: ""
 
-          # ── Client — Linux x86-64 AVX2 ──────────────────────────────────────
+          # ── Client — Linux x86-64 x86-64-v3 ────────────────────────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: client
             artifact_name: client
-            asset_name: client-linux-amd64-avx2
-            rustflags: "-C target-feature=+avx,+avx2,+fma"
+            asset_name: client-linux-amd64-v3
+            rustflags: "-C target-cpu=x86-64-v3"
 
           # ── Client — Linux ARM64 NEON baseline (NEON fallback) ──────────────
           - os: ubuntu-24.04-arm
@@ -90,13 +90,13 @@ jobs:
             asset_name: server-linux-amd64
             rustflags: ""
 
-          # ── Server — Linux x86-64 AVX2 ──────────────────────────────────────
+          # ── Server — Linux x86-64 x86-64-v3 ────────────────────────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: server
             artifact_name: server
-            asset_name: server-linux-amd64-avx2
-            rustflags: "-C target-feature=+avx,+avx2,+fma"
+            asset_name: server-linux-amd64-v3
+            rustflags: "-C target-cpu=x86-64-v3"
 
           # ── Server — Linux ARM64 NEON baseline ──────────────────────────────
           - os: ubuntu-24.04-arm
@@ -275,9 +275,9 @@ jobs:
 
             | Binary | Platform | Notes |
             |--------|----------|-------|
-            | `client-windows-x86_64.exe` | Windows x86-64 | AVX2 + FMA |
+            | `client-windows-x86_64.exe` | Windows x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) |
             | `client-linux-amd64` | Linux x86-64 | SSE2 baseline — runs on any x86-64 CPU |
-            | `client-linux-amd64-avx2` | Linux x86-64 | AVX2 + FMA — requires Haswell / Zen 1+ |
+            | `client-linux-amd64-v3` | Linux x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) — requires Haswell / Zen 1+ |
             | `client-linux-arm64` | Linux ARM64 | NEON baseline — runs on any AArch64 |
             | `client-linux-arm64-sve` | Linux ARM64 | SVE2 + NEON — requires Graviton 3 / Neoverse V1+ |
             | `client-macos-arm64` | macOS Apple Silicon | NEON (Apple chips do not implement ARM SVE) |
@@ -288,7 +288,7 @@ jobs:
             | Binary | Platform | Notes |
             |--------|----------|-------|
             | `server-linux-amd64` | Linux x86-64 | SSE2 baseline |
-            | `server-linux-amd64-avx2` | Linux x86-64 | AVX2 + FMA |
+            | `server-linux-amd64-v3` | Linux x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) |
             | `server-linux-arm64` | Linux ARM64 | NEON baseline |
             | `server-linux-arm64-sve` | Linux ARM64 | SVE2 + NEON |
           prerelease: true
