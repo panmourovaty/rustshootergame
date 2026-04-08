@@ -55,7 +55,13 @@ bevy = { version = "0.18", default-features = false, features = [
     "keyboard",
     "default_font",
 ] }
-avian3d = "0.5"
+avian3d = { version = "0.5", default-features = false, features = [
+    "3d",
+    "f32",
+    "parry-f32",
+    "xpbd_joints",
+    "parallel",
+] }
 lightyear = { version = "0.26", optional = true }
 aeronet_webtransport = { version = "0.19", optional = true }
 # getrandom needs the "js" feature to compile for wasm32-unknown-unknown,
