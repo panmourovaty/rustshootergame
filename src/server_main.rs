@@ -25,8 +25,10 @@ fn main() {
 
     App::new()
         .add_plugins(MinimalPlugins)
-        // insert_state must come after MinimalPlugins so the StateTransition
-        // schedule (registered by StatesPlugin) already exists.
+        // MinimalPlugins does not include StatesPlugin (only DefaultPlugins does).
+        // Add it explicitly so the StateTransition schedule exists before
+        // insert_state is called.
+        .add_plugins(StatesPlugin)
         // Start directly in Loading → Playing; skip ConnectScreen.
         .insert_state(GameState::Loading)
         .add_plugins(avian3d::PhysicsPlugins::default())
