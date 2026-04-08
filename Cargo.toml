@@ -77,13 +77,13 @@ opt-level = 1
 opt-level = 3
 
 [profile.release]
-opt-level = 3
-lto = "thin"
+opt-level = "s"
+lto = "fat"
 codegen-units = 1
 
 # WASM release: smaller binary, no debug info.
 [profile.wasm-release]
 inherits = "release"
-opt-level = "z"
+opt-level = "s"
 lto = "fat"
 codegen-units = 1
