@@ -97,18 +97,6 @@ fn spawn_crosshair(parent: &mut ChildSpawnerCommands) {
             let white = BackgroundColor(Color::WHITE);
 
             c.spawn((
-                Name::new("CrosshairDot"),
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(-2.0),
-                    top: Val::Px(-2.0),
-                    width: Val::Px(4.0),
-                    height: Val::Px(4.0),
-                    ..default()
-                },
-                white,
-            ));
-            c.spawn((
                 Name::new("CrosshairTop"),
                 Node {
                     position_type: PositionType::Absolute,
