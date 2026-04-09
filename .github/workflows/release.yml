@@ -39,13 +39,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ── Client — Windows x86-64 (x86-64-v2) ─────────────────────────────
+          # ── Client — Windows x86-64 (x86-64-v3) ─────────────────────────────
+          # Windows 11's minimum supported CPUs (Intel 8th-gen / AMD Zen+)
+          # all implement AVX2 + FMA + BMI2, so v3 is the correct baseline.
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary: client
             artifact_name: client.exe
             asset_name: client-windows-x86_64.exe
-            rustflags: "-C target-cpu=x86-64-v2"
+            rustflags: "-C target-cpu=x86-64-v3"
 
           # ── Client — Linux x86-64 (x86-64-v2) ──────────────────────────────
           - os: ubuntu-latest
@@ -351,7 +353,7 @@ jobs:
 
             | Binary | Platform | Notes |
             |--------|----------|-------|
-            | `client-windows-x86_64.exe` | Windows x86-64 | x86-64-v2 (SSE4.2 + POPCNT) |
+            | `client-windows-x86_64.exe` | Windows x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) — Windows 11 minimum CPUs all support this |
             | `client-linux-amd64` | Linux x86-64 | x86-64-v2 (SSE4.2 + POPCNT) |
             | `client-linux-arm64` | Linux ARM64 | NEON baseline — runs on any AArch64 |
             | `client-macos-arm64` | macOS Apple Silicon | NEON |
