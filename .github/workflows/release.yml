@@ -207,6 +207,15 @@ jobs:
           echo "Installing wasm-bindgen-cli $VER"
           cargo install wasm-bindgen-cli --version "=$VER" --locked
 
+      - name: Install wasm-opt (Binaryen) and zstd
+        run: sudo apt-get install -y binaryen zstd
+
+      - name: Optimise WASM with wasm-opt (before wasm-bindgen to avoid externref table corruption)
+        run: |
+          wasm-opt -Oz --strip-debug --vacuum \
+            target/wasm32-unknown-unknown/wasm-release/client.wasm \
+            -o target/wasm32-unknown-unknown/wasm-release/client.wasm
+
       - name: Generate JS bindings
         run: |
           mkdir -p web-dist
@@ -214,15 +223,6 @@ jobs:
             --out-dir web-dist \
             --target web \
             target/wasm32-unknown-unknown/wasm-release/client.wasm
-
-      - name: Install wasm-opt (Binaryen) and zstd
-        run: sudo apt-get install -y binaryen zstd
-
-      - name: Optimise WASM with wasm-opt
-        run: |
-          wasm-opt -Oz --strip-debug --vacuum --enable-reference-types \
-            web-dist/client_bg.wasm \
-            -o web-dist/client_bg.wasm
 
       - name: Compress WASM with ZSTD (maximum compression)
         run: |
