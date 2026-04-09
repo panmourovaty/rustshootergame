@@ -11,7 +11,12 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-COPY Cargo.toml Cargo.lock ./
+# GIT_HASH is injected by CI via --build-arg; defaults to "unknown" for
+# local docker builds where the .git directory is absent (.dockerignore).
+ARG GIT_HASH=unknown
+ENV GIT_HASH=$GIT_HASH
+
+COPY Cargo.toml Cargo.lock build.rs ./
 COPY src/ src/
 
 RUN cargo build \
