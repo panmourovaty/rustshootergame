@@ -287,7 +287,7 @@ wasm-bindgen \
   target/wasm32-unknown-unknown/wasm-release/client.wasm
 
 # Shrink and optimise the output (requires binaryen — see below)
-wasm-opt -Oz --strip-debug --vacuum \
+wasm-opt -Oz --strip-debug --vacuum --enable-reference-types \
   dist/client_bg.wasm \
   -o dist/client_bg.wasm
 ```
