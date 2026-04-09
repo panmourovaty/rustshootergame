@@ -8,6 +8,7 @@ mod network;
 
 use game::{GamePlugin, GameState};
 use map::MapPlugin;
+use network::server::MapUrl;
 
 fn print_startup_banner(ports: Res<network::server::ServerPorts>) {
     info!("===========================================");
@@ -27,12 +28,19 @@ struct Args {
     /// WebTransport port for browser (WASM) clients.
     #[arg(long, default_value_t = 7778)]
     web_port: u16,
+    /// HTTPS URL of the map archive (.tar.zst) to send to connecting clients.
+    /// If omitted, clients use the built-in placeholder map.
+    ///
+    /// Example: --map-url https://example.com/maps/mymap.tar.zst
+    #[arg(long)]
+    map_url: Option<String>,
 }
 
 fn main() {
     let args = Args::parse();
 
     App::new()
+        .insert_resource(MapUrl(args.map_url))
         .add_plugins(MinimalPlugins)
         // MinimalPlugins omits LogPlugin — add it so info!/warn!/error! work.
         .add_plugins(bevy::log::LogPlugin::default())

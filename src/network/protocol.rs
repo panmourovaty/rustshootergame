@@ -148,6 +148,15 @@ pub struct KillNotifyMsg {
     pub victim_id: u64,
 }
 
+/// Server sends the HTTPS URL of the map archive (.tar.zst) to a connecting
+/// client immediately after receiving its JoinMsg.  The client downloads the
+/// archive, extracts it, and replaces the built-in placeholder map with the
+/// GLTF scene(s) contained inside.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MapUrlMsg {
+    pub url: String,
+}
+
 // ─── Protocol Plugin ─────────────────────────────────────────────────────────
 
 pub struct ProtocolPlugin;
@@ -185,6 +194,8 @@ impl Plugin for ProtocolPlugin {
         app.register_message::<TakeDamageMsg>()
             .add_direction(NetworkDirection::ServerToClient);
         app.register_message::<KillNotifyMsg>()
+            .add_direction(NetworkDirection::ServerToClient);
+        app.register_message::<MapUrlMsg>()
             .add_direction(NetworkDirection::ServerToClient);
     }
 }

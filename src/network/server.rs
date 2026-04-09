@@ -19,7 +19,7 @@ use aeronet_webtransport::wtransport::Identity;
 use lightyear::prelude::server::WebTransportServerIo;
 
 use super::protocol::{
-    GameChannel, HitMsg, JoinMsg, KillNotifyMsg, PlayerJoinMsg, PlayerLeaveMsg,
+    GameChannel, HitMsg, JoinMsg, KillNotifyMsg, MapUrlMsg, PlayerJoinMsg, PlayerLeaveMsg,
     PosChannel, PosUpdateMsg, ProtocolPlugin, RelayedPosMsg, TakeDamageMsg, PROTOCOL_ID,
 };
 
@@ -44,6 +44,7 @@ impl Plugin for ServerNetworkPlugin {
             udp: self.port,
             web: self.web_port,
         });
+        app.init_resource::<MapUrl>();
         app.add_systems(Startup, spawn_server_entities);
         app.add_systems(Update, log_client_connections);
 
@@ -93,6 +94,11 @@ pub struct ServerPorts {
     pub udp: u16,
     pub web: u16,
 }
+
+/// The map archive URL set via `--map-url`.  `None` means clients use the
+/// built-in placeholder map.
+#[derive(Resource, Default)]
+pub struct MapUrl(pub Option<String>);
 
 // ─── Colour palette ──────────────────────────────────────────────────────────
 
@@ -169,13 +175,16 @@ fn log_client_connections(query: Query<Entity, Added<Connected>>) {
 
 /// Reads `JoinMsg` from newly connected clients, stores `ServerPlayerInfo`,
 /// then broadcasts `PlayerJoinMsg` to all existing clients and sends each
-/// existing player's info to the newcomer.
+/// existing player's info to the newcomer.  Also sends `MapUrlMsg` when a
+/// map URL has been configured via `--map-url`.
 fn handle_join_msg(
     mut commands: Commands,
+    map_url: Res<MapUrl>,
     // Split into two separate queries to avoid aliased-mutability conflicts.
     mut join_rx_query: Query<(Entity, &mut MessageReceiver<JoinMsg>), With<ClientOf>>,
     existing_info_query: Query<&ServerPlayerInfo, With<ClientOf>>,
     mut announce_senders: Query<&mut MessageSender<PlayerJoinMsg>, With<ClientOf>>,
+    mut map_url_senders: Query<&mut MessageSender<MapUrlMsg>, With<ClientOf>>,
 ) {
     // Phase 1: collect all join messages (drains the receivers).
     let mut joins: Vec<(Entity, JoinMsg)> = Vec::new();
@@ -240,6 +249,15 @@ fn handle_join_msg(
             if let Ok(mut sender) = announce_senders.get_mut(_new_entity) {
                 sender.send::<GameChannel>(existing_msg);
                 warn!("[SERVER] Sent existing player id={} info to newcomer id={}", existing_id, join_msg.client_id);
+            }
+        }
+
+        // If a map URL is configured, send it to the newcomer so they can
+        // download and load the dynamic map.
+        if let Some(url) = &map_url.0 {
+            if let Ok(mut sender) = map_url_senders.get_mut(_new_entity) {
+                sender.send::<GameChannel>(MapUrlMsg { url: url.clone() });
+                info!("[SERVER] Sent MapUrlMsg to id={}: {}", join_msg.client_id, url);
             }
         }
     }
