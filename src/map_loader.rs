@@ -107,6 +107,15 @@ struct LoadingMapHandles {
 #[derive(Component)]
 pub struct DynamicMap;
 
+/// Marker for the full-screen loading overlay shown while a map is being
+/// downloaded or its GLTF assets are being loaded.
+#[derive(Component)]
+struct MapLoadingOverlay;
+
+/// Marks the text node inside the loading overlay so its message can be updated.
+#[derive(Component)]
+struct MapLoadingLabel;
+
 // ─── Systems ─────────────────────────────────────────────────────────────────
 
 /// Reacts to `LoadMapFromUrl`, kicks off a background download, and installs
@@ -114,10 +123,40 @@ pub struct DynamicMap;
 fn handle_load_map_event(
     mut events: MessageReader<LoadMapFromUrl>,
     mut commands: Commands,
+    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
 ) {
     for event in events.read() {
         let url = event.0.clone();
         info!("[MAP] Starting download: {}", url);
+
+        // Despawn any stale overlay from a previous load attempt.
+        for entity in overlay_query.iter() {
+            commands.entity(entity).despawn_recursive();
+        }
+        // Show a full-screen overlay so the player isn't wandering the
+        // placeholder map while the download is in flight.
+        commands
+            .spawn((
+                Name::new("MapLoadingOverlay"),
+                MapLoadingOverlay,
+                Node {
+                    position_type: PositionType::Absolute,
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.85)),
+            ))
+            .with_children(|c| {
+                c.spawn((
+                    MapLoadingLabel,
+                    Text::new("Downloading map..."),
+                    TextFont { font_size: 28.0, ..default() },
+                    TextColor(Color::WHITE),
+                ));
+            });
 
         let slot: Arc<Mutex<Option<Result<ExtractedMap, String>>>> =
             Arc::new(Mutex::new(None));
@@ -155,6 +194,8 @@ fn poll_download(
     asset_server: Res<AssetServer>,
     mut spawn_points: ResMut<SpawnPoints>,
     mut commands: Commands,
+    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+    mut label_query: Query<&mut Text, With<MapLoadingLabel>>,
 ) {
     let Some(pending) = pending else { return };
 
@@ -169,9 +210,18 @@ fn poll_download(
     match result {
         Err(e) => {
             error!("[MAP] Download/extract failed: {}", e);
+            // Remove the overlay — don't leave a black screen on failure.
+            for entity in overlay_query.iter() {
+                commands.entity(entity).despawn_recursive();
+            }
         }
         Ok(extracted) => {
             info!("[MAP] Extracted {} files; inserting into map:// source", extracted.files.len());
+
+            // Advance the overlay message — download done, now waiting for GPU upload.
+            for mut text in label_query.iter_mut() {
+                **text = "Loading map assets...".to_string();
+            }
 
             // Populate spawn points from the optional text file.
             if let Some(sp_bytes) = extracted.files.get("spawn_points.txt") {
@@ -219,6 +269,7 @@ fn poll_gltf_loaded(
     mut commands: Commands,
     hardcoded_query: Query<Entity, With<HardcodedMap>>,
     dynamic_query: Query<Entity, With<DynamicMap>>,
+    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
 ) {
     let Some(mut loading) = loading else {
         // Drain events even when we're not waiting.
@@ -295,6 +346,11 @@ fn poll_gltf_loaded(
         }
     }
 
+    // Map is live — remove the loading overlay.
+    for entity in overlay_query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+
     commands.remove_resource::<LoadingMapHandles>();
 }
 
@@ -331,6 +387,13 @@ fn extract_archive(compressed: &[u8]) -> Result<ExtractedMap, String> {
             .to_string_lossy()
             .trim_start_matches("./")
             .replace('\\', "/");
+
+        // Skip directory entries — their paths end with '/' (or have no
+        // file_name component), and Dir::insert_asset would panic on the
+        // file_name().unwrap() it performs internally.
+        if Path::new(&path_str).file_name().is_none() {
+            continue;
+        }
 
         let mut data = Vec::new();
         entry.read_to_end(&mut data).map_err(|e| e.to_string())?;
