@@ -74,6 +74,11 @@ getrandom = { version = "0.2", features = ["js"] }
 serde = { version = "1", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
 
+# wgpu is already a transitive dep via bevy_render; we declare it directly
+# so that `wgpu::Backends` is a stable, explicit dependency for native builds.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wgpu = { version = "27", default-features = false }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # Used to read window.__RSG_SERVER_ADDR__ set by index.html from server.txt.
 js-sys = "0.3"
