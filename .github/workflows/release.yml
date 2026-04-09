@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: write
+  deployments: write
 
 # ── Required GitHub Secrets ───────────────────────────────────────────────────
 #
@@ -33,51 +34,89 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ── Client — Windows ────────────────────────────────────────────────
+          # ── Client — Windows x86-64 (x86-64-v3) ─────────────────────────────
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary: client
             artifact_name: client.exe
             asset_name: client-windows-x86_64.exe
+            rustflags: "-C target-cpu=x86-64-v3"
 
-          # ── Client — Linux x86-64 ───────────────────────────────────────────
+          # ── Client — Linux x86-64 SSE2 baseline (SSE fallback) ──────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: client
             artifact_name: client
             asset_name: client-linux-amd64
+            rustflags: ""
 
-          # ── Client — Linux ARM64 ────────────────────────────────────────────
+          # ── Client — Linux x86-64 x86-64-v3 ────────────────────────────────
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: client
+            artifact_name: client
+            asset_name: client-linux-amd64-v3
+            rustflags: "-C target-cpu=x86-64-v3"
+
+          # ── Client — Linux ARM64 NEON baseline (NEON fallback) ──────────────
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             binary: client
             artifact_name: client
             asset_name: client-linux-arm64
+            rustflags: ""
 
-          # ── Client — macOS Apple Silicon ────────────────────────────────────
+          # ── Client — Linux ARM64 SVE ─────────────────────────────────────────
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: client
+            artifact_name: client
+            asset_name: client-linux-arm64-sve
+            rustflags: "-C target-feature=+sve,+sve2,+neon"
+
+          # ── Client — macOS Apple Silicon (NEON; no SVE on Apple chips) ───────
           - os: macos-latest
             target: aarch64-apple-darwin
             binary: client
             artifact_name: client
             asset_name: client-macos-arm64
+            rustflags: ""
 
-          # ── Server — Linux x86-64 ───────────────────────────────────────────
+          # ── Server — Linux x86-64 SSE2 baseline ─────────────────────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: server
             artifact_name: server
             asset_name: server-linux-amd64
+            rustflags: ""
 
-          # ── Server — Linux ARM64 ────────────────────────────────────────────
+          # ── Server — Linux x86-64 x86-64-v3 ────────────────────────────────
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: server
+            artifact_name: server
+            asset_name: server-linux-amd64-v3
+            rustflags: "-C target-cpu=x86-64-v3"
+
+          # ── Server — Linux ARM64 NEON baseline ──────────────────────────────
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             binary: server
             artifact_name: server
             asset_name: server-linux-arm64
+            rustflags: ""
+
+          # ── Server — Linux ARM64 SVE ─────────────────────────────────────────
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: server
+            artifact_name: server
+            asset_name: server-linux-arm64-sve
+            rustflags: "-C target-feature=+sve,+sve2,+neon"
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -103,11 +142,14 @@ jobs:
             pkg-config
 
       - name: Build release binary
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
         run: >
           cargo build
           --release
           --target ${{ matrix.target }}
           --bin ${{ matrix.binary }}
+          ${{ matrix.binary == 'server' && '--no-default-features --features server' || '' }}
 
       - name: Rename binary (Unix)
         if: runner.os != 'Windows'
@@ -124,7 +166,7 @@ jobs:
             "${{ matrix.asset_name }}"
 
       - name: Upload build artefact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.asset_name }}
           path: ${{ matrix.asset_name }}
@@ -137,7 +179,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain (with wasm32 target)
         uses: dtolnay/rust-toolchain@stable
@@ -173,11 +215,22 @@ jobs:
             --target web \
             target/wasm32-unknown-unknown/wasm-release/client.wasm
 
-      - name: Copy HTML
-        run: cp web/index.html web-dist/index.html
+      - name: Install wasm-opt (Binaryen)
+        run: sudo apt-get install -y binaryen
+
+      - name: Optimise WASM with wasm-opt
+        run: |
+          wasm-opt -Oz --strip-debug --vacuum \
+            web-dist/client_bg.wasm \
+            -o web-dist/client_bg.wasm
+
+      - name: Copy static web assets
+        run: |
+          cp web/index.html web-dist/index.html
+          cp web/server.txt web-dist/server.txt
 
       - name: Upload WASM artefact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: web-dist/
@@ -199,17 +252,25 @@ jobs:
   # ── GitHub Release (main branch only, rolling "latest") ─────────────────────
   release:
     name: Publish GitHub Release
-    needs: build-native
+    needs: [build-native, build-wasm]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Download all native build artefacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/
-          # Exclude the WASM artefact — it is deployed to Cloudflare Pages.
           pattern: "client-*,server-*"
+
+      - name: Download WASM artefact
+        uses: actions/download-artifact@v8
+        with:
+          path: dist/web-dist/
+          name: web-dist
+
+      - name: Zip WASM web client
+        run: zip -r dist/client-web.zip dist/web-dist/
 
       - name: List artefacts
         run: find dist/ -type f | sort
@@ -222,18 +283,28 @@ jobs:
           body: |
             Automated build from the `main` branch — commit ${{ github.sha }}.
 
-            | Binary | Platform |
-            |--------|----------|
-            | `client-windows-x86_64.exe` | Windows x86-64 |
-            | `client-linux-amd64` | Linux x86-64 |
-            | `client-linux-arm64` | Linux ARM64 |
-            | `client-macos-arm64` | macOS Apple Silicon |
-            | `server-linux-amd64` | Linux x86-64 (headless server) |
-            | `server-linux-arm64` | Linux ARM64 (headless server) |
+            ### Client
 
-            The web client is deployed to Cloudflare Pages automatically.
+            | Binary | Platform | Notes |
+            |--------|----------|-------|
+            | `client-windows-x86_64.exe` | Windows x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) |
+            | `client-linux-amd64` | Linux x86-64 | SSE2 baseline — runs on any x86-64 CPU |
+            | `client-linux-amd64-v3` | Linux x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) — requires Haswell / Zen 1+ |
+            | `client-linux-arm64` | Linux ARM64 | NEON baseline — runs on any AArch64 |
+            | `client-linux-arm64-sve` | Linux ARM64 | SVE2 + NEON — requires Graviton 3 / Neoverse V1+ |
+            | `client-macos-arm64` | macOS Apple Silicon | NEON (Apple chips do not implement ARM SVE) |
+            | `client-web.zip` | Browser (WASM) | Also live on Cloudflare Pages |
+
+            ### Server
+
+            | Binary | Platform | Notes |
+            |--------|----------|-------|
+            | `server-linux-amd64` | Linux x86-64 | SSE2 baseline |
+            | `server-linux-amd64-v3` | Linux x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) |
+            | `server-linux-arm64` | Linux ARM64 | NEON baseline |
+            | `server-linux-arm64-sve` | Linux ARM64 | SVE2 + NEON |
           prerelease: true
           allowUpdates: true
           removeArtifacts: true
-          artifacts: "dist/**/*"
+          artifacts: "dist/client-*/*,dist/server-*/*,dist/client-web.zip"
           token: ${{ secrets.GITHUB_TOKEN }}

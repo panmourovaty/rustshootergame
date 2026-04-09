@@ -15,30 +15,69 @@ path = "src/server_main.rs"
 
 [features]
 default = ["networking"]
-networking = ["dep:lightyear"]
-# WASM / web build: enables WebGL 2 rendering, disables networking (UDP is not
-# available in browsers).  Build with:
+# Native builds: UDP + WebTransport (server listens on both; native client uses UDP).
+# Use the `server` feature for server-only builds (omits client game logic modules).
+server = ["networking"]
+networking = [
+    "dep:lightyear",
+    "dep:aeronet_webtransport",
+    "lightyear/std",
+    "lightyear/udp",
+    "lightyear/webtransport",
+    "lightyear/webtransport_self_signed",
+    "lightyear/client",
+    "lightyear/server",
+    "lightyear/netcode",
+]
+# WASM / web build: WebTransport only (no UDP, no server).
+# Build with:
 #   cargo build --target wasm32-unknown-unknown --bin client \
 #               --no-default-features --features web --release
+#
+# Required environment variables for the WASM build:
+#   RSG_CERT_DIGEST   SHA-256 fingerprint of the server's self-signed cert
+#                     (printed by the server on startup). Leave unset when
+#                     using a CA-signed certificate.
 web = [
     "bevy/webgl2",
     "bevy/3d",
     "bevy/mouse",
     "bevy/keyboard",
     "bevy/default_font",
+    "dep:lightyear",
+    "lightyear/std",
+    "lightyear/webtransport",
+    "lightyear/webtransport_self_signed",
+    "lightyear/client",
+    "lightyear/netcode",
 ]
 
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = [
-    "3d",         # full 3D: rendering, lighting, audio, UI, state, logging, winit
-    "mouse",      # Bevy 0.18: mouse input is an explicit feature
-    "keyboard",   # Bevy 0.18: keyboard input is an explicit feature
+    "3d",
+    "mouse",
+    "keyboard",
     "default_font",
 ] }
-avian3d = "0.5"
-lightyear = { version = "0.26", features = ["udp", "client", "server", "netcode"], optional = true }
+avian3d = { version = "0.5", default-features = false, features = [
+    "3d",
+    "f32",
+    "parry-f32",
+    "xpbd_joints",
+    "parallel",
+] }
+lightyear = { version = "0.26", optional = true, default-features = false }
+aeronet_webtransport = { version = "0.19", optional = true }
+# getrandom needs the "js" feature to compile for wasm32-unknown-unknown,
+# so it can use the browser's crypto.getRandomValues() API.
+getrandom = { version = "0.2", features = ["js"] }
 serde = { version = "1", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Used to read window.__RSG_SERVER_ADDR__ set by index.html from server.txt.
+js-sys = "0.3"
+wasm-bindgen = "0.2"
 
 [profile.dev]
 opt-level = 1
@@ -48,12 +87,12 @@ opt-level = 3
 
 [profile.release]
 opt-level = 3
-lto = "thin"
+lto = "fat"
 codegen-units = 1
 
 # WASM release: smaller binary, no debug info.
 [profile.wasm-release]
 inherits = "release"
-opt-level = "z"
+opt-level = "s"
 lto = "fat"
 codegen-units = 1

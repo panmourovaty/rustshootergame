@@ -1,24 +1,37 @@
-/// Network subsystem — gated behind the `networking` feature flag.
+/// Network subsystem.
 ///
 /// Uses lightyear 0.26 (Bevy 0.18 compatible).
+///
+/// Feature gates:
+///   `networking`  — native builds: UDP + WebTransport client + server
+///   `web`         — WASM builds: WebTransport client only (no UDP, no server)
 
-#[cfg(feature = "networking")]
+// Protocol is shared by both native and WASM builds.
+#[cfg(any(feature = "networking", feature = "web"))]
 pub mod protocol;
 
+// Server only exists for native builds.
 #[cfg(feature = "networking")]
 pub mod server;
 
-#[cfg(feature = "networking")]
+// Client exists for native (non-server) and WASM builds.
+// Excluded when building with `--features server` so that the server binary
+// doesn't need to compile client-side game modules (pvp, weapon, etc.).
+#[cfg(any(
+    all(feature = "networking", not(feature = "server")),
+    feature = "web"
+))]
 pub mod client;
 
-// Provide empty stubs when the feature is disabled so the module tree
-// still compiles without any `#[cfg]` noise at call sites.
+// ── Stubs when all networking is disabled ────────────────────────────────────
+
 #[cfg(not(feature = "networking"))]
 pub mod server {
     use bevy::prelude::*;
 
     pub struct ServerNetworkPlugin {
         pub port: u16,
+        pub web_port: u16,
     }
 
     impl Plugin for ServerNetworkPlugin {
@@ -26,11 +39,10 @@ pub mod server {
     }
 }
 
-#[cfg(not(feature = "networking"))]
+#[cfg(not(any(feature = "networking", feature = "web")))]
 pub mod client {
     use bevy::prelude::*;
 
-    /// No-op stub used when the `networking` feature is disabled.
     pub struct ClientNetworkPlugin;
 
     impl Plugin for ClientNetworkPlugin {

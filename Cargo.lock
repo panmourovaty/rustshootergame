@@ -4475,7 +4475,6 @@ dependencies = [
  "bevy_utils",
  "lightyear_connection",
  "lightyear_core",
- "lightyear_interpolation",
  "lightyear_link",
  "lightyear_messages",
  "lightyear_prediction",
@@ -6635,11 +6634,15 @@ dependencies = [
 name = "rustshootergame"
 version = "0.1.0"
 dependencies = [
+ "aeronet_webtransport",
  "avian3d",
  "bevy",
  "clap",
+ "getrandom 0.2.17",
+ "js-sys",
  "lightyear",
  "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]

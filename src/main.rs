@@ -7,6 +7,7 @@ mod game;
 mod map;
 mod network;
 mod player;
+mod pvp;
 mod ui;
 mod weapon;
 
@@ -14,13 +15,12 @@ use connect_screen::ConnectScreenPlugin;
 use game::{GamePlugin, GameState};
 use map::MapPlugin;
 use player::PlayerPlugin;
+use pvp::PvpPlugin;
 use ui::UiPlugin;
 use weapon::WeaponPlugin;
 
 fn main() {
     App::new()
-        // Start in the connect screen, not the default Loading state.
-        .insert_state(GameState::ConnectScreen)
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "RustShooter".to_string(),
@@ -35,6 +35,9 @@ fn main() {
             }),
             ..default()
         }))
+        // insert_state must come after DefaultPlugins so that the StateTransition
+        // schedule (registered by StatesPlugin inside DefaultPlugins) already exists.
+        .insert_state(GameState::ConnectScreen)
         .add_plugins(avian3d::PhysicsPlugins::default())
         // GamePlugin calls init_state::<GameState>() which is a no-op here
         // because the state is already inserted above.
@@ -43,6 +46,7 @@ fn main() {
         .add_plugins(MapPlugin)
         .add_plugins(PlayerPlugin)
         .add_plugins(WeaponPlugin)
+        .add_plugins(PvpPlugin)
         .add_plugins(UiPlugin)
         .add_plugins(network::client::ClientNetworkPlugin)
         .run();
