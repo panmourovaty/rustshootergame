@@ -12,7 +12,7 @@ use bevy::prelude::*;
 use lightyear::prelude::server::*;
 use lightyear::prelude::{Connected, LocalAddr, NetworkTarget};
 use lightyear::prelude::{MessageReceiver, MessageSender};
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv6Addr, SocketAddr};
 use std::time::Duration;
 
 use aeronet_webtransport::wtransport::Identity;
@@ -127,7 +127,10 @@ fn spawn_server_entities(mut commands: Commands, ports: Res<ServerPorts>) {
     };
 
     // ── UDP listener (native clients) ────────────────────────────────────────
-    let udp_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), ports.udp);
+    // Bind to [::] (dual-stack) so both IPv4-mapped and native IPv6 clients
+    // can connect.  On Linux, IPV6_V6ONLY defaults to 0, meaning [::]:port
+    // also accepts IPv4 connections (shown as ::ffff:1.2.3.4).
+    let udp_addr = SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), ports.udp);
     let udp_entity = commands.spawn((
         Name::new("GameServerUdp"),
         ServerUdpIo::default(),
@@ -138,7 +141,7 @@ fn spawn_server_entities(mut commands: Commands, ports: Res<ServerPorts>) {
     info!("UDP listener on {}", udp_addr);
 
     // ── WebTransport listener (browser clients) ───────────────────────────────
-    let wt_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), ports.web);
+    let wt_addr = SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), ports.web);
 
     let identity = Identity::self_signed(["localhost", "127.0.0.1", "::1"])
         .expect("failed to generate self-signed TLS certificate");

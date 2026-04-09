@@ -20,7 +20,7 @@ use lightyear::prelude::*;
 use std::time::Duration;
 
 #[cfg(not(target_arch = "wasm32"))]
-use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 
 #[cfg(target_arch = "wasm32")]
 use std::net::SocketAddr;
@@ -98,11 +98,7 @@ struct PosUpdateTimer(f32);
 // ─── Connection systems ──────────────────────────────────────────────────────
 
 fn start_connecting(mut commands: Commands, profile: Res<PlayerProfile>) {
-    let addr_str = if profile.server_addr.contains(':') {
-        profile.server_addr.clone()
-    } else {
-        format!("{}:7777", profile.server_addr)
-    };
+    let addr_str = append_default_port(&profile.server_addr);
 
     let server_addr: SocketAddr = match resolve_addr(&addr_str) {
         Ok(a) => a,
@@ -338,6 +334,35 @@ fn send_remote_hits(
 
 // ─── Address resolution ──────────────────────────────────────────────────────
 
+/// Appends `:7777` when the user omitted the port, handling all address forms:
+///   IPv4 bare:       `1.2.3.4`        → `1.2.3.4:7777`
+///   IPv4 with port:  `1.2.3.4:7777`   → unchanged
+///   IPv6 bare:       `::1`            → `[::1]:7777`
+///   IPv6 bracketed:  `[::1]`          → `[::1]:7777`
+///   IPv6 with port:  `[::1]:7777`     → unchanged
+///   Hostname bare:   `example.com`    → `example.com:7777`
+///   Hostname:port:   `example.com:80` → unchanged
+fn append_default_port(addr: &str) -> String {
+    // Bracketed IPv6 — either [::1]:port (has port) or [::1] (no port).
+    if addr.starts_with('[') {
+        return if addr.contains("]:") {
+            addr.to_string()
+        } else {
+            format!("{}:7777", addr)
+        };
+    }
+    // Bare IPv6 address (contains colons and parses as IpAddr) → add brackets + port.
+    if addr.contains(':') {
+        if addr.parse::<std::net::IpAddr>().is_ok() {
+            return format!("[{}]:7777", addr);
+        }
+        // host:port — already has a port separator.
+        return addr.to_string();
+    }
+    // IPv4 or hostname without port.
+    format!("{}:7777", addr)
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn resolve_addr(addr_str: &str) -> Result<SocketAddr, String> {
     addr_str
@@ -363,7 +388,13 @@ fn spawn_transport(
     _profile: &PlayerProfile,
 ) {
     use lightyear::prelude::client::Connect;
-    let local_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0);
+    // Bind to the same IP family as the server address so the OS doesn't reject
+    // the sendto with EINVAL (can't send IPv6 packets from an IPv4 socket).
+    let local_addr = if server_addr.is_ipv6() {
+        SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 0)
+    } else {
+        SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0)
+    };
     let entity = commands.spawn((
         Name::new("GameClient"),
         PendingClient,
