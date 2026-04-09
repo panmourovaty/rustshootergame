@@ -176,7 +176,7 @@ fn tick_waiting_timeout(
 ) {
     let Some(mut timeout) = timeout else { return };
     timeout.0.tick(time.delta());
-    if timeout.0.finished() {
+    if timeout.0.finish() {
         for entity in overlay_query.iter() {
             commands.entity(entity).despawn();
         }
