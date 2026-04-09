@@ -158,11 +158,14 @@ impl Plugin for ProtocolPlugin {
         app.add_channel::<GameChannel>(ChannelSettings {
             mode: ChannelMode::OrderedReliable(ReliableSettings::default()),
             ..default()
-        });
+        })
+        .add_direction(NetworkDirection::Bidirectional);
+
         app.add_channel::<PosChannel>(ChannelSettings {
             mode: ChannelMode::UnorderedUnreliable,
             ..default()
-        });
+        })
+        .add_direction(NetworkDirection::Bidirectional);
 
         // ── Client → Server messages ──────────────────────────────────────────
         app.register_message::<JoinMsg>()
