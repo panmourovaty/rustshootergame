@@ -26,9 +26,10 @@ use std::net::{Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::net::SocketAddr;
 
 use super::protocol::{
-    GameChannel, HitMsg, JoinMsg, KillNotifyMsg, PlayerJoinMsg, PlayerLeaveMsg,
+    GameChannel, HitMsg, JoinMsg, KillNotifyMsg, MapUrlMsg, PlayerJoinMsg, PlayerLeaveMsg,
     PosChannel, PosUpdateMsg, ProtocolPlugin, RelayedPosMsg, TakeDamageMsg, PROTOCOL_ID,
 };
+use crate::map_loader::LoadMapFromUrl;
 use crate::game::{ConnectionError, GameState, PlayerProfile};
 use crate::player::LocalPlayer;
 use crate::pvp::{
@@ -231,6 +232,7 @@ fn process_server_messages(
             &mut MessageReceiver<RelayedPosMsg>,
             &mut MessageReceiver<TakeDamageMsg>,
             &mut MessageReceiver<KillNotifyMsg>,
+            &mut MessageReceiver<MapUrlMsg>,
         ),
         (With<Client>, With<Connected>),
     >,
@@ -239,6 +241,7 @@ fn process_server_messages(
     mut moved_events: MessageWriter<RemotePlayerMoved>,
     mut damaged_events: MessageWriter<LocalPlayerDamaged>,
     mut kill_events: MessageWriter<RemoteKillEvent>,
+    mut map_url_events: EventWriter<LoadMapFromUrl>,
 ) {
     for (
         mut join_rx,
@@ -246,6 +249,7 @@ fn process_server_messages(
         mut pos_rx,
         mut damage_rx,
         mut kill_rx,
+        mut map_url_rx,
     ) in client_query.iter_mut()
     {
         // PlayerJoinMsg
@@ -297,6 +301,12 @@ fn process_server_messages(
                 killer_id: msg.killer_id,
                 victim_id: msg.victim_id,
             });
+        }
+
+        // MapUrlMsg — server is telling us which map to load.
+        for msg in map_url_rx.receive() {
+            info!("[MAP] Server sent map URL: {}", msg.url);
+            map_url_events.write(LoadMapFromUrl(msg.url));
         }
     }
 }

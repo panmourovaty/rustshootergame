@@ -11,6 +11,7 @@ use bevy::render::{
 mod connect_screen;
 mod game;
 mod map;
+mod map_loader;
 mod network;
 mod player;
 mod pvp;
@@ -20,6 +21,7 @@ mod weapon;
 use connect_screen::ConnectScreenPlugin;
 use game::{GamePlugin, GameState};
 use map::MapPlugin;
+use map_loader::{create_map_asset_source, MapLoaderPlugin};
 use player::PlayerPlugin;
 use pvp::PvpPlugin;
 use ui::UiPlugin;
@@ -53,6 +55,12 @@ fn wgpu_backends() -> wgpu::Backends {
 }
 
 fn main() {
+    // ── Map asset source ─────────────────────────────────────────────────────
+    // The "map://" source must be registered BEFORE DefaultPlugins (which adds
+    // AssetPlugin).  We create a shared Dir here and hand a clone to the
+    // MapLoaderPlugin so it can populate files at runtime.
+    let (map_source, map_dir) = create_map_asset_source();
+
     let title = format!("RustShooterGame [{}] [{}]", RENDER_API, GIT_HASH);
 
     // Native: restrict to the platform's preferred graphics API.
@@ -88,6 +96,7 @@ fn main() {
     });
 
     App::new()
+        .register_asset_source("map", map_source)
         .add_plugins(plugins)
         // insert_state must come after DefaultPlugins so that the StateTransition
         // schedule (registered by StatesPlugin inside DefaultPlugins) already exists.
@@ -98,6 +107,7 @@ fn main() {
         .add_plugins(GamePlugin)
         .add_plugins(ConnectScreenPlugin)
         .add_plugins(MapPlugin)
+        .add_plugins(MapLoaderPlugin { dir: map_dir })
         .add_plugins(PlayerPlugin)
         .add_plugins(WeaponPlugin)
         .add_plugins(PvpPlugin)

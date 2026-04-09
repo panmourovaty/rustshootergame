@@ -3,6 +3,14 @@ use avian3d::prelude::*;
 
 pub struct MapPlugin;
 
+// ─── Components ─────────────────────────────────────────────────────────────
+
+/// Marker for every entity that belongs to the built-in placeholder map
+/// (physics bodies, meshes, lights).  The dynamic map loader despawns all
+/// entities carrying this component before spawning the downloaded map.
+#[derive(Component)]
+pub struct HardcodedMap;
+
 // ─── Resources ──────────────────────────────────────────────────────────────
 
 /// Possible spawn locations used by the player and respawn system.
@@ -36,6 +44,7 @@ fn spawn_map_physics(mut commands: Commands) {
     // Floor
     commands.spawn((
         Name::new("Floor"),
+        HardcodedMap,
         Transform::from_xyz(0.0, -0.5, 0.0),
         RigidBody::Static,
         Collider::cuboid(40.0, 1.0, 40.0),
@@ -43,6 +52,7 @@ fn spawn_map_physics(mut commands: Commands) {
     // Ceiling
     commands.spawn((
         Name::new("Ceiling"),
+        HardcodedMap,
         Transform::from_xyz(0.0, 4.5, 0.0),
         RigidBody::Static,
         Collider::cuboid(40.0, 1.0, 40.0),
@@ -56,6 +66,7 @@ fn spawn_map_physics(mut commands: Commands) {
     ] {
         commands.spawn((
             Name::new(name),
+            HardcodedMap,
             Transform::from_translation(pos),
             RigidBody::Static,
             Collider::cuboid(half.0, half.1, half.2),
@@ -74,6 +85,7 @@ fn spawn_map_physics(mut commands: Commands) {
     ] {
         commands.spawn((
             Name::new("Cover"),
+            HardcodedMap,
             Transform::from_translation(pos),
             RigidBody::Static,
             Collider::cuboid(1.5, 1.5, 1.5),
@@ -107,6 +119,7 @@ fn spawn_map_visuals(
     // Floor
     commands.spawn((
         Name::new("Floor_Mesh"),
+        HardcodedMap,
         Mesh3d(meshes.add(Cuboid::new(40.0, 1.0, 40.0))),
         MeshMaterial3d(grey_floor),
         Transform::from_xyz(0.0, -0.5, 0.0),
@@ -114,6 +127,7 @@ fn spawn_map_visuals(
     // Ceiling
     commands.spawn((
         Name::new("Ceiling_Mesh"),
+        HardcodedMap,
         Mesh3d(meshes.add(Cuboid::new(40.0, 1.0, 40.0))),
         MeshMaterial3d(grey_ceil),
         Transform::from_xyz(0.0, 4.5, 0.0),
@@ -127,6 +141,7 @@ fn spawn_map_visuals(
     ] {
         commands.spawn((
             Name::new(name),
+            HardcodedMap,
             Mesh3d(meshes.add(Cuboid::new(size.0, size.1, size.2))),
             MeshMaterial3d(wall_mat.clone()),
             Transform::from_translation(pos),
@@ -145,6 +160,7 @@ fn spawn_map_visuals(
     ] {
         commands.spawn((
             Name::new("Cover_Mesh"),
+            HardcodedMap,
             Mesh3d(meshes.add(Cuboid::new(1.5, 1.5, 1.5))),
             MeshMaterial3d(materials.add(StandardMaterial {
                 base_color: color,
@@ -157,6 +173,7 @@ fn spawn_map_visuals(
     // Lighting
     commands.spawn((
         Name::new("Sun"),
+        HardcodedMap,
         DirectionalLight {
             illuminance: 15_000.0,
             shadows_enabled: true,
