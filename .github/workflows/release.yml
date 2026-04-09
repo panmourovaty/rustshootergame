@@ -22,10 +22,10 @@ permissions:
 #                             https://dash.cloudflare.com → Pages → Create a project
 #                             (choose "Direct Upload" — CI will handle all uploads).
 #
-#   DOCKERHUB_USERNAME        Docker Hub username that owns the target repository.
-#
 #   DOCKERHUB_TOKEN           Docker Hub access token (Settings → Security →
 #                             New Access Token).  Use a token, not your password.
+#                             The Docker Hub username is taken from
+#                             github.repository_owner — no extra secret needed.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -277,14 +277,14 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/rustshootergame-server
+          images: ${{ github.repository_owner }}/rustshootergame-server
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=sha,prefix=,suffix=,format=short
