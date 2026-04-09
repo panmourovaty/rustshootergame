@@ -34,7 +34,13 @@ ENV GIT_HASH=$GIT_HASH
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY src/ src/
 
-RUN cargo build \
+# musl links everything statically by default, but libwayland-client,
+# libasound and libudev have no static (.a) archives on Alpine — only .so.
+# -crt-static=false switches to dynamic mode so those .so files are used.
+# The runtime image stays clean: lto=fat + --as-needed (already in the
+# linker flags) eliminates all dead Wayland/ALSA/udev symbols before
+# linking because the server only runs MinimalPlugins.
+RUN RUSTFLAGS="-C target-feature=-crt-static" cargo build \
     --release \
     --bin server \
     --no-default-features \
