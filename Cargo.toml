@@ -5,6 +5,11 @@ edition = "2021"
 description = "A Counter Strike inspired FPS game built with Bevy"
 license = "MIT"
 
+# ── Library crate (Android shared library + rlib for desktop/WASM binary) ──────
+[lib]
+name = "rustshootergame"
+crate-type = ["cdylib", "rlib"]
+
 [[bin]]
 name = "client"
 path = "src/main.rs"
@@ -13,8 +18,22 @@ path = "src/main.rs"
 name = "server"
 path = "src/server_main.rs"
 
+# ── Android metadata (used by cargo-apk) ────────────────────────────────────────
+[package.metadata.android]
+package = "io.github.panmourovaty.rustshootergame"
+label = "RustShooter"
+
+[package.metadata.android.sdk]
+min_sdk_version = 24
+target_sdk_version = 34
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.INTERNET"
+
 [features]
 default = ["networking"]
+# Enable bevy's Android windowing backend (NativeActivity via winit).
+android = ["bevy/android"]
 # Native builds: UDP + WebTransport (server listens on both; native client uses UDP).
 # Use the `server` feature for server-only builds (omits client game logic modules).
 server = ["networking"]

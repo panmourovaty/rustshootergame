@@ -1,0 +1,68 @@
+app-id: io.github.panmourovaty.rustshootergame
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+
+# Rust stable toolchain from Flathub — always tracks the latest stable Rust.
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+
+command: client
+
+finish-args:
+  # Wayland + X11 (XWayland fallback) display access.
+  - --socket=wayland
+  - --socket=x11
+  - --share=ipc
+  # GPU access (Vulkan / OpenGL via Mesa).
+  - --device=all
+  # PulseAudio / PipeWire audio.
+  - --socket=pulseaudio
+  # Multiplayer networking.
+  - --share=network
+
+# Make the Rust toolchain available in PATH for the build.
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    # Cargo stores its registry/cache here during build.
+    CARGO_HOME: /run/build/rustshootergame/cargo
+    # Optimise for the generic host CPU inside the Flatpak sandbox.
+    RUSTFLAGS: ''
+
+modules:
+  - name: rustshootergame
+    buildsystem: simple
+
+    build-options:
+      env:
+        CARGO_HOME: /run/build/rustshootergame/cargo
+        RUSTFLAGS: ''
+
+    build-commands:
+      # Populate the offline cargo registry from the pre-generated sources.
+      - cargo --offline fetch --manifest-path Cargo.toml --verbose
+      # Build the client binary (release, all default features).
+      - cargo --offline build --release --bin client
+      # Install the binary.
+      - install -Dm755 target/release/client /app/bin/client
+      # Minimal .desktop entry so the app appears in launchers.
+      - |
+        mkdir -p /app/share/applications
+        printf '[Desktop Entry]\nName=RustShooter\nExec=client\nType=Application\nCategories=Game;\n' \
+          > /app/share/applications/io.github.panmourovaty.rustshootergame.desktop
+
+    sources:
+      # ── Game source (repo root, one level up from this manifest) ─────────────
+      - type: dir
+        path: ..
+
+      # ── Cargo dependency sources ──────────────────────────────────────────────
+      # generated-sources.json is created by flatpak-cargo-generator.py at CI
+      # time and committed alongside this manifest.  To regenerate locally:
+      #
+      #   pip install aiohttp toml
+      #   curl -LO https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
+      #   python3 flatpak-cargo-generator.py ../Cargo.lock -o generated-sources.json
+      #
+      - generated-sources.json

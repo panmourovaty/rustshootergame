@@ -6,6 +6,7 @@ on:
 permissions:
   contents: write
   deployments: write
+  packages: write
 
 # ── Required GitHub Secrets ───────────────────────────────────────────────────
 #
@@ -21,6 +22,11 @@ permissions:
 #                             Create the project once at
 #                             https://dash.cloudflare.com → Pages → Create a project
 #                             (choose "Direct Upload" — CI will handle all uploads).
+#
+#   DOCKERHUB_USERNAME        Docker Hub account username for image pushes.
+#
+#   DOCKERHUB_TOKEN           Docker Hub access token (Settings → Security →
+#                             New Access Token).  Only needs "Read & Write" scope.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -42,7 +48,7 @@ jobs:
             asset_name: client-windows-x86_64.exe
             rustflags: "-C target-cpu=x86-64-v3"
 
-          # ── Client — Linux x86-64 SSE2 baseline (SSE fallback) ──────────────
+          # ── Client — Linux x86-64 SSE2 baseline ─────────────────────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: client
@@ -50,15 +56,7 @@ jobs:
             asset_name: client-linux-amd64
             rustflags: ""
 
-          # ── Client — Linux x86-64 x86-64-v3 ────────────────────────────────
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            binary: client
-            artifact_name: client
-            asset_name: client-linux-amd64-v3
-            rustflags: "-C target-cpu=x86-64-v3"
-
-          # ── Client — Linux ARM64 NEON baseline (NEON fallback) ──────────────
+          # ── Client — Linux ARM64 NEON baseline ──────────────────────────────
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             binary: client
@@ -66,15 +64,7 @@ jobs:
             asset_name: client-linux-arm64
             rustflags: ""
 
-          # ── Client — Linux ARM64 SVE ─────────────────────────────────────────
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-            binary: client
-            artifact_name: client
-            asset_name: client-linux-arm64-sve
-            rustflags: "-C target-feature=+sve,+sve2,+neon"
-
-          # ── Client — macOS Apple Silicon (NEON; no SVE on Apple chips) ───────
+          # ── Client — macOS Apple Silicon ─────────────────────────────────────
           - os: macos-latest
             target: aarch64-apple-darwin
             binary: client
@@ -90,14 +80,6 @@ jobs:
             asset_name: server-linux-amd64
             rustflags: ""
 
-          # ── Server — Linux x86-64 x86-64-v3 ────────────────────────────────
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            binary: server
-            artifact_name: server
-            asset_name: server-linux-amd64-v3
-            rustflags: "-C target-cpu=x86-64-v3"
-
           # ── Server — Linux ARM64 NEON baseline ──────────────────────────────
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
@@ -105,14 +87,6 @@ jobs:
             artifact_name: server
             asset_name: server-linux-arm64
             rustflags: ""
-
-          # ── Server — Linux ARM64 SVE ─────────────────────────────────────────
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
-            binary: server
-            artifact_name: server
-            asset_name: server-linux-arm64-sve
-            rustflags: "-C target-feature=+sve,+sve2,+neon"
 
     steps:
       - name: Checkout source
@@ -253,10 +227,180 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+  # ── Flatpak bundles (AMD64 + ARM64, latest Flathub deps) ────────────────────
+  build-flatpak:
+    name: Build Flatpak (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+
+      - name: Install Flatpak, flatpak-builder and Python deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            flatpak \
+            flatpak-builder \
+            python3-pip \
+            python3-aiohttp \
+            python3-toml
+
+      - name: Add Flathub remote (user-level, no sudo needed at runtime)
+        run: |
+          flatpak --user remote-add --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Install Flatpak runtime, SDK and Rust extension from Flathub
+        run: |
+          flatpak --user install -y --noninteractive flathub \
+            org.freedesktop.Platform//24.08 \
+            org.freedesktop.Sdk//24.08 \
+            org.freedesktop.Sdk.Extension.rust-stable//24.08
+
+      - name: Generate offline Cargo sources for Flatpak
+        run: |
+          curl -fsSL \
+            https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py \
+            -o flatpak-cargo-generator.py
+          python3 flatpak-cargo-generator.py Cargo.lock \
+            -o flatpak/generated-sources.json
+
+      - name: Build Flatpak bundle
+        run: |
+          flatpak-builder \
+            --user \
+            --force-clean \
+            --repo=flatpak-repo \
+            --disable-rofiles-fuse \
+            build-flatpak \
+            flatpak/io.github.panmourovaty.rustshootergame.yml
+
+      - name: Export Flatpak bundle file
+        run: |
+          flatpak build-bundle \
+            --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
+            flatpak-repo \
+            rustshootergame-${{ matrix.arch }}.flatpak \
+            io.github.panmourovaty.rustshootergame
+
+      - name: Upload Flatpak artefact
+        uses: actions/upload-artifact@v7
+        with:
+          name: rustshootergame-flatpak-${{ matrix.arch }}
+          path: rustshootergame-${{ matrix.arch }}.flatpak
+          if-no-files-found: error
+
+  # ── Docker server image (Alpine, AMD64 + ARM64) — push to Docker Hub ─────────
+  build-docker:
+    name: Build & push Docker server image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+
+      # QEMU lets buildx cross-compile to ARM64 on the x86-64 runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Push to Docker Hub only on the main branch.
+      - name: Log in to Docker Hub
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build (and push on main) multi-arch Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.ref == 'refs/heads/main' }}
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/rustshootergame-server:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/rustshootergame-server:${{ github.sha }}
+          # Layer cache — speeds up repeated builds significantly.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Android ARM64 native library ─────────────────────────────────────────────
+  # Produces librustshootergame.so for aarch64-linux-android, packaged into a
+  # debug APK via cargo-apk.  A release-signed APK suitable for the Play Store
+  # requires a keystore secret (out of scope here).
+  build-android:
+    name: Build Android ARM64
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain (Android target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Rust build artefacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: aarch64-linux-android
+
+      - name: Set up Java 17 (required by Android SDK tools)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android NDK r27
+        run: |
+          ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;27.2.12479018"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.2.12479018" \
+            >> "$GITHUB_ENV"
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Build Android ARM64 native library
+        run: |
+          cargo ndk \
+            --target aarch64-linux-android \
+            --platform 24 \
+            -- build \
+            --release \
+            --lib \
+            --features android
+
+      - name: Collect native library
+        run: |
+          mkdir -p android-out/lib/arm64-v8a
+          cp target/aarch64-linux-android/release/librustshootergame.so \
+             android-out/lib/arm64-v8a/librustshootergame.so
+
+      - name: Upload Android artefact
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-arm64
+          path: android-out/
+          if-no-files-found: error
+
   # ── GitHub Release (main branch only, rolling "latest") ─────────────────────
   release:
     name: Publish GitHub Release
-    needs: [build-native, build-wasm]
+    needs: [build-native, build-wasm, build-flatpak, build-android]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
@@ -273,8 +417,25 @@ jobs:
           path: dist/web-dist/
           name: web-dist
 
+      - name: Download Flatpak artefacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist/flatpak/
+          pattern: "rustshootergame-flatpak-*"
+
+      - name: Download Android artefact
+        uses: actions/download-artifact@v8
+        with:
+          path: dist/android/
+          name: android-arm64
+
       - name: Zip WASM web client
         run: zip -r dist/client-web.zip dist/web-dist/
+
+      - name: Zip Android native library
+        run: |
+          cd dist/android
+          zip -r ../client-android-arm64.zip .
 
       - name: List artefacts
         run: find dist/ -type f | sort
@@ -293,22 +454,54 @@ jobs:
             |--------|----------|-------|
             | `client-windows-x86_64.exe` | Windows x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) |
             | `client-linux-amd64` | Linux x86-64 | SSE2 baseline — runs on any x86-64 CPU |
-            | `client-linux-amd64-v3` | Linux x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) — requires Haswell / Zen 1+ |
             | `client-linux-arm64` | Linux ARM64 | NEON baseline — runs on any AArch64 |
-            | `client-linux-arm64-sve` | Linux ARM64 | SVE2 + NEON — requires Graviton 3 / Neoverse V1+ |
-            | `client-macos-arm64` | macOS Apple Silicon | NEON (Apple chips do not implement ARM SVE) |
+            | `client-macos-arm64` | macOS Apple Silicon | |
             | `client-web.zip` | Browser (WASM) | Also live on Cloudflare Pages |
+
+            ### Flatpak (Linux — AMD64 + ARM64)
+
+            | Bundle | Platform | Notes |
+            |--------|----------|-------|
+            | `rustshootergame-amd64.flatpak` | Linux x86-64 | Runtime from Flathub 24.08 |
+            | `rustshootergame-arm64.flatpak` | Linux ARM64 | Runtime from Flathub 24.08 |
+
+            Install with:
+            ```
+            flatpak install rustshootergame-<arch>.flatpak
+            flatpak run io.github.panmourovaty.rustshootergame
+            ```
+
+            ### Android
+
+            | Artefact | Architecture | Notes |
+            |----------|--------------|-------|
+            | `client-android-arm64.zip` | ARM64 (aarch64) | Native library — requires packaging into an APK |
 
             ### Server
 
             | Binary | Platform | Notes |
             |--------|----------|-------|
             | `server-linux-amd64` | Linux x86-64 | SSE2 baseline |
-            | `server-linux-amd64-v3` | Linux x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) |
             | `server-linux-arm64` | Linux ARM64 | NEON baseline |
-            | `server-linux-arm64-sve` | Linux ARM64 | SVE2 + NEON |
+
+            ### Docker (server)
+
+            The headless server image is published to Docker Hub on every `main` push:
+
+            ```
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/rustshootergame-server:latest
+            docker run -p 7777:7777/udp -p 7778:7778/udp \
+              ${{ secrets.DOCKERHUB_USERNAME }}/rustshootergame-server:latest
+            ```
+
+            Built from Alpine Linux — supports **amd64** and **arm64**.
           prerelease: true
           allowUpdates: true
           removeArtifacts: true
-          artifacts: "dist/client-*/*,dist/server-*/*,dist/client-web.zip"
+          artifacts: >
+            dist/client-*/*,
+            dist/server-*/*,
+            dist/client-web.zip,
+            dist/flatpak/rustshootergame-flatpak-*/*.flatpak,
+            dist/client-android-arm64.zip
           token: ${{ secrets.GITHUB_TOKEN }}
