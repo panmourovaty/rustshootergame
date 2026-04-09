@@ -220,7 +220,7 @@ jobs:
 
       - name: Optimise WASM with wasm-opt
         run: |
-          wasm-opt -Oz --strip-debug --vacuum \
+          wasm-opt -Oz --strip-debug --vacuum --enable-reference-types \
             web-dist/client_bg.wasm \
             -o web-dist/client_bg.wasm
 
