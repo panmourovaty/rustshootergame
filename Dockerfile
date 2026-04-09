@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # ── Build stage ───────────────────────────────────────────────────────────────
 FROM rust:latest AS builder
 
@@ -28,15 +26,12 @@ RUN cargo build \
     --features server
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
-FROM ubuntu:latest AS runtime
-
-ENV DEBIAN_FRONTEND=noninteractive
-
+FROM debian:stable-slim AS runtime
 
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libx11-6 \
-    libasound2t64 \
+    libasound2 \
     libudev1 \
     libxkbcommon0 \
     && rm -rf /var/lib/apt/lists/*
