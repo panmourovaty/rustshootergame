@@ -226,7 +226,7 @@ jobs:
 
       - name: Compress WASM with ZSTD (maximum compression)
         run: |
-          zstd --ultra -22 --no-progress \
+          zstd --ultra -22 --long=23 --no-progress \
             web-dist/client_bg.wasm \
             -o web-dist/client_bg.wasm.zst
           mv web-dist/client_bg.wasm.zst web-dist/client_bg.wasm
