@@ -49,8 +49,8 @@ use crate::map::{HardcodedMap, SpawnPoints};
 #[derive(Resource, Clone)]
 pub struct MapDir(pub Dir);
 
-/// Fire this event (e.g. from the network client) to trigger a map download.
-#[derive(Event, Clone)]
+/// Fire this message (e.g. from the network client) to trigger a map download.
+#[derive(Message, Clone)]
 pub struct LoadMapFromUrl(pub String);
 
 pub struct MapLoaderPlugin {
@@ -62,7 +62,7 @@ pub struct MapLoaderPlugin {
 impl Plugin for MapLoaderPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(MapDir(self.dir.clone()));
-        app.add_event::<LoadMapFromUrl>();
+        app.add_message::<LoadMapFromUrl>();
         app.add_systems(
             Update,
             (handle_load_map_event, poll_download, poll_gltf_loaded),
@@ -112,7 +112,7 @@ pub struct DynamicMap;
 /// Reacts to `LoadMapFromUrl`, kicks off a background download, and installs
 /// `PendingDownload` so `poll_download` can check on it every frame.
 fn handle_load_map_event(
-    mut events: EventReader<LoadMapFromUrl>,
+    mut events: MessageReader<LoadMapFromUrl>,
     mut commands: Commands,
 ) {
     for event in events.read() {
@@ -214,7 +214,7 @@ fn poll_download(
 /// swaps out the hardcoded map for the downloaded one.
 fn poll_gltf_loaded(
     loading: Option<ResMut<LoadingMapHandles>>,
-    mut gltf_events: EventReader<AssetEvent<Gltf>>,
+    mut gltf_events: MessageReader<AssetEvent<Gltf>>,
     gltf_assets: Res<Assets<Gltf>>,
     mut commands: Commands,
     hardcoded_query: Query<Entity, With<HardcodedMap>>,
@@ -250,11 +250,11 @@ fn poll_gltf_loaded(
 
     // Despawn the previous dynamic map (if any).
     for entity in dynamic_query.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
     // Despawn the hardcoded placeholder map.
     for entity in hardcoded_query.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 
     // Spawn visual scene.
@@ -311,7 +311,7 @@ fn parse_vec3_line(line: &str) -> Option<Vec3> {
 // ─── Shared extraction logic ──────────────────────────────────────────────────
 
 fn extract_archive(compressed: &[u8]) -> Result<ExtractedMap, String> {
-    use ruzstd::StreamingDecoder;
+    use ruzstd::decoding::StreamingDecoder;
     use std::io::Read;
 
     // Decompress zstd stream.

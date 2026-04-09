@@ -241,7 +241,7 @@ fn process_server_messages(
     mut moved_events: MessageWriter<RemotePlayerMoved>,
     mut damaged_events: MessageWriter<LocalPlayerDamaged>,
     mut kill_events: MessageWriter<RemoteKillEvent>,
-    mut map_url_events: EventWriter<LoadMapFromUrl>,
+    mut map_url_events: MessageWriter<LoadMapFromUrl>,
 ) {
     for (
         mut join_rx,
