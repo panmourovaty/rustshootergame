@@ -198,9 +198,10 @@ fn handle_join_msg(
     for (_new_entity, join_msg) in joins {
         let color = color_for_id(join_msg.client_id);
 
-        info!(
-            "Player '{}' (id={}) joined",
-            join_msg.username, join_msg.client_id
+        let connected_count = announce_senders.iter().count();
+        warn!(
+            "[SERVER] Player '{}' (id={}) joined — broadcasting to {} connected clients",
+            join_msg.username, join_msg.client_id, connected_count
         );
 
         // Insert player info component on the client entity.
@@ -217,9 +218,12 @@ fn handle_join_msg(
         };
 
         // Broadcast the new player's info to ALL connected clients.
+        let mut broadcast_count = 0usize;
         for mut sender in announce_senders.iter_mut() {
             sender.send::<GameChannel>(announce.clone());
+            broadcast_count += 1;
         }
+        warn!("[SERVER] Broadcast PlayerJoinMsg for id={} to {} senders", join_msg.client_id, broadcast_count);
 
         // Send each pre-existing player's info to the newcomer so their
         // lobby/scoreboard is populated immediately.
@@ -235,6 +239,7 @@ fn handle_join_msg(
             // The newcomer's sender is in announce_senders; send only to them.
             if let Ok(mut sender) = announce_senders.get_mut(_new_entity) {
                 sender.send::<GameChannel>(existing_msg);
+                warn!("[SERVER] Sent existing player id={} info to newcomer id={}", existing_id, join_msg.client_id);
             }
         }
     }

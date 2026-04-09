@@ -116,26 +116,36 @@ fn spawn_remote_player(
     profile: Res<PlayerProfile>,
 ) {
     for ev in events.read() {
+        warn!(
+            "[PVP] RemotePlayerJoined event: id={} username='{}' (local id={})",
+            ev.client_id, ev.username, profile.client_id
+        );
+
         // Skip our own join — we are the local player, not a remote one.
         if ev.client_id == profile.client_id {
+            warn!("[PVP] Skipping self-join for id={}", ev.client_id);
             continue;
         }
         // Don't double-spawn if we already have this player tracked.
         if remote_players.by_id.contains_key(&ev.client_id) {
+            warn!("[PVP] Already tracking id={}, skipping duplicate spawn", ev.client_id);
             continue;
         }
 
         let color = Color::srgb(ev.color[0], ev.color[1], ev.color[2]);
 
+        // Capsule3d: radius 0.35 m, half_length 0.5 m → total height 1.7 m.
+        // Spawn with center at Y = 0.85 so the capsule sits exactly on the floor.
         let entity = commands.spawn((
             Name::new(format!("RemotePlayer_{}", ev.client_id)),
-            Mesh3d(meshes.add(Cylinder {
+            Mesh3d(meshes.add(Capsule3d {
                 radius: 0.35,
-                half_height: 0.85,
+                half_length: 0.5,
             })),
             MeshMaterial3d(materials.add(StandardMaterial {
                 base_color: color,
-                perceptual_roughness: 0.8,
+                perceptual_roughness: 0.6,
+                metallic: 0.1,
                 ..default()
             })),
             Transform::from_xyz(0.0, 0.85, 0.0),
@@ -152,8 +162,8 @@ fn spawn_remote_player(
         // Register name so the kill feed can display it.
         player_names.0.insert(ev.client_id, ev.username.clone());
 
-        info!(
-            "Remote player '{}' (id={}) spawned as {:?}",
+        warn!(
+            "[PVP] Spawned remote player '{}' (id={}) as entity {:?} at (0, 0.85, 0)",
             ev.username, ev.client_id, entity
         );
     }
@@ -167,7 +177,7 @@ fn despawn_remote_player(
     for ev in events.read() {
         if let Some(data) = remote_players.by_id.remove(&ev.client_id) {
             commands.entity(data.entity).despawn();
-            info!("Remote player id={} despawned", ev.client_id);
+            warn!("[PVP] Remote player id={} despawned", ev.client_id);
         }
     }
 }
@@ -182,7 +192,11 @@ fn update_remote_player_pos(
             if let Ok(mut tf) = transform_query.get_mut(data.entity) {
                 tf.translation = ev.pos;
                 tf.rotation = Quat::from_rotation_y(ev.yaw);
+            } else {
+                warn!("[PVP] update_remote_player_pos: entity {:?} for id={} missing Transform", data.entity, ev.client_id);
             }
+        } else {
+            warn!("[PVP] update_remote_player_pos: no tracked entity for id={} — join not yet processed?", ev.client_id);
         }
     }
 }

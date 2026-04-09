@@ -179,9 +179,14 @@ fn send_join_msg(
         username: profile.username.clone(),
     };
 
+    let mut sent = false;
     for mut sender in client_query.iter_mut() {
         sender.send::<GameChannel>(msg.clone());
-        info!("Sent JoinMsg: id={} username='{}'", msg.client_id, msg.username);
+        sent = true;
+        warn!("[NET] Sent JoinMsg: id={} username='{}'", msg.client_id, msg.username);
+    }
+    if !sent {
+        warn!("[NET] send_join_msg: query returned nothing — MessageSender<JoinMsg> not found!");
     }
 }
 
@@ -245,9 +250,9 @@ fn process_server_messages(
     {
         // PlayerJoinMsg
         for msg in join_rx.receive() {
-            info!(
-                "Server: player '{}' (id={}) joined",
-                msg.username, msg.client_id
+            warn!(
+                "[NET] Received PlayerJoinMsg: id={} username='{}' color={:?}",
+                msg.client_id, msg.username, msg.color
             );
             joined_events.write(RemotePlayerJoined {
                 client_id: msg.client_id,
