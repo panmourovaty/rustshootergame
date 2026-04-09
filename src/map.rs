@@ -29,10 +29,12 @@ impl Plugin for MapPlugin {
         ]));
         // Physics always runs (server + client).
         app.add_systems(Startup, spawn_map_physics);
-        // Visuals only run when the asset plugins are present (client only).
+        // Visuals only run when the full render stack is present (client only).
+        // We guard on Assets<StandardMaterial> because the server initialises
+        // Assets<Mesh> for avian3d but never registers StandardMaterial.
         app.add_systems(
             Startup,
-            spawn_map_visuals.run_if(resource_exists::<Assets<Mesh>>),
+            spawn_map_visuals.run_if(resource_exists::<Assets<StandardMaterial>>),
         );
     }
 }

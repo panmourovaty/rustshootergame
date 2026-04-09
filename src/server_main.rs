@@ -57,12 +57,17 @@ fn main() {
         // mesh assets — it uses only explicit Collider primitives.
         .add_plugins(bevy::asset::AssetPlugin::default())
         .init_asset::<Mesh>()
-        // Start directly in Loading → Playing; skip ConnectScreen.
-        .insert_state(GameState::Loading)
         .add_plugins(avian3d::PhysicsPlugins::default())
         .add_plugins(GamePlugin)
         .add_plugins(MapPlugin)
         .add_plugins(network::server::ServerNetworkPlugin { port: args.port, web_port: args.web_port })
+        // Skip ConnectScreen: immediately advance to Loading (which GamePlugin's
+        // OnEnter(Loading) system then advances to Playing).  Done via a startup
+        // system so GamePlugin's init_state::<GameState>() runs first and we
+        // avoid the "already initialized" warning from double-inserting state.
+        .add_systems(Startup, |mut next: ResMut<NextState<GameState>>| {
+            next.set(GameState::Loading);
+        })
         .add_systems(Startup, print_startup_banner)
         .run();
 }
