@@ -215,8 +215,8 @@ jobs:
             --target web \
             target/wasm32-unknown-unknown/wasm-release/client.wasm
 
-      - name: Install wasm-opt (Binaryen)
-        run: sudo apt-get install -y binaryen
+      - name: Install wasm-opt (Binaryen) and zstd
+        run: sudo apt-get install -y binaryen zstd
 
       - name: Optimise WASM with wasm-opt
         run: |
@@ -224,10 +224,19 @@ jobs:
             web-dist/client_bg.wasm \
             -o web-dist/client_bg.wasm
 
+      - name: Compress WASM with ZSTD (maximum compression)
+        run: |
+          zstd --ultra -22 --no-progress \
+            web-dist/client_bg.wasm \
+            -o web-dist/client_bg.wasm.zst
+          mv web-dist/client_bg.wasm.zst web-dist/client_bg.wasm
+          echo "Compressed size: $(du -sh web-dist/client_bg.wasm | cut -f1)"
+
       - name: Copy static web assets
         run: |
           cp web/index.html web-dist/index.html
           cp web/server.txt web-dist/server.txt
+          cp web/_headers web-dist/_headers
 
       - name: Upload WASM artefact
         uses: actions/upload-artifact@v7

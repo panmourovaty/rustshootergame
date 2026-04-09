@@ -1,0 +1,4 @@
+/client_bg.wasm
+  Content-Encoding: zstd
+  Content-Type: application/wasm
+  Cache-Control: no-transform
