@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 use avian3d::prelude::*;
 
-use crate::game::{GameState, KillEvent, PlayerNames, Scores};
+use crate::game::{GameState, KillEvent, PlayerNames, PlayerProfile, Scores};
 use crate::player::Health;
 
 pub struct PvpPlugin;
@@ -85,7 +85,7 @@ impl Plugin for PvpPlugin {
         app.add_message::<LocalPlayerDamaged>();
         app.add_message::<RemoteKillEvent>();
 
-        app.add_systems(OnEnter(GameState::Playing), spawn_scoreboard);
+        app.add_systems(OnEnter(GameState::Playing), (spawn_scoreboard, register_local_player));
         app.add_systems(OnEnter(GameState::ConnectScreen), cleanup_on_disconnect);
 
         app.add_systems(
@@ -113,8 +113,13 @@ fn spawn_remote_player(
     mut events: MessageReader<RemotePlayerJoined>,
     mut remote_players: ResMut<RemotePlayers>,
     mut player_names: ResMut<PlayerNames>,
+    profile: Res<PlayerProfile>,
 ) {
     for ev in events.read() {
+        // Skip our own join — we are the local player, not a remote one.
+        if ev.client_id == profile.client_id {
+            continue;
+        }
         // Don't double-spawn if we already have this player tracked.
         if remote_players.by_id.contains_key(&ev.client_id) {
             continue;
@@ -218,6 +223,16 @@ fn handle_remote_kill(
             scores.get_kills(ev.killer_id)
         );
     }
+}
+
+/// Called on OnEnter(Playing): record the local player's own name so the
+/// scoreboard can display it (the server doesn't send us our own PlayerJoinMsg
+/// in a way that would reach spawn_remote_player after the self-filter).
+fn register_local_player(
+    profile: Res<PlayerProfile>,
+    mut player_names: ResMut<PlayerNames>,
+) {
+    player_names.0.insert(profile.client_id, profile.username.clone());
 }
 
 // ─── Scoreboard ──────────────────────────────────────────────────────────────
