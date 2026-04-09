@@ -3,11 +3,26 @@
 # ── Build stage ───────────────────────────────────────────────────────────────
 FROM rust:alpine AS builder
 
-# musl-dev: C headers for musl libc (ring crate needs them)
-# pkgconfig: required by some build scripts
+# Build-time system dependencies required by transitive Bevy/wgpu deps.
+# These are only needed in the builder; the final Alpine runtime image
+# stays clean because the server uses MinimalPlugins (no display/audio)
+# and LTO + --as-needed drops all unreferenced shared-library symbols.
+#
+#   musl-dev          C standard-library headers (ring, proc-macro crates)
+#   pkgconfig         pkg-config tool used by several build scripts
+#   wayland-dev       wayland-client.pc  (bevy_winit → winit → wayland-sys)
+#   libxkbcommon-dev  xkbcommon.pc       (winit keyboard-layout handling)
+#   eudev-dev         udev.pc            (bevy_gilrs gamepad support)
+#   alsa-lib-dev      alsa.pc            (bevy_audio / cpal)
+#   libx11-dev        x11.pc             (winit X11 backend)
 RUN apk add --no-cache \
     musl-dev \
-    pkgconfig
+    pkgconfig \
+    wayland-dev \
+    libxkbcommon-dev \
+    eudev-dev \
+    alsa-lib-dev \
+    libx11-dev
 
 WORKDIR /app
 
