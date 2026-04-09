@@ -48,6 +48,15 @@ fn main() {
         // Add it explicitly so the StateTransition schedule exists before
         // insert_state is called.
         .add_plugins(bevy::state::app::StatesPlugin)
+        // MinimalPlugins omits AssetPlugin, but avian3d's collider-from-mesh
+        // feature registers a `clear_unused_colliders` system that reads
+        // MessageReader<AssetEvent<Mesh>>.  Without AssetPlugin the message
+        // channel is never initialised and Bevy panics at startup.  Adding
+        // AssetPlugin (headless, no renderer required) and registering Mesh as
+        // an asset type satisfies avian3d even though the server never loads
+        // mesh assets — it uses only explicit Collider primitives.
+        .add_plugins(bevy::asset::AssetPlugin::default())
+        .init_asset::<Mesh>()
         // Start directly in Loading → Playing; skip ConnectScreen.
         .insert_state(GameState::Loading)
         .add_plugins(avian3d::PhysicsPlugins::default())
