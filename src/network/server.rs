@@ -10,11 +10,12 @@
 
 use bevy::prelude::*;
 use lightyear::prelude::server::*;
-use lightyear::prelude::{Connected, LocalAddr, NetworkTarget};
+use lightyear::prelude::{Connected, LocalAddr};
 use lightyear::prelude::{MessageReceiver, MessageSender};
 use std::net::{Ipv6Addr, SocketAddr};
 use std::time::Duration;
 
+use aeronet_webtransport::wtransport::Identity;
 use lightyear::prelude::server::WebTransportServerIo;
 
 // ─── Certificate resource ─────────────────────────────────────────────────────

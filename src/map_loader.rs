@@ -131,7 +131,7 @@ fn handle_load_map_event(
 
         // Despawn any stale overlay from a previous load attempt.
         for entity in overlay_query.iter() {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
         }
         // Show a full-screen overlay so the player isn't wandering the
         // placeholder map while the download is in flight.
@@ -212,7 +212,7 @@ fn poll_download(
             error!("[MAP] Download/extract failed: {}", e);
             // Remove the overlay — don't leave a black screen on failure.
             for entity in overlay_query.iter() {
-                commands.entity(entity).despawn_recursive();
+                commands.entity(entity).despawn();
             }
         }
         Ok(extracted) => {
@@ -348,7 +348,7 @@ fn poll_gltf_loaded(
 
     // Map is live — remove the loading overlay.
     for entity in overlay_query.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 
     commands.remove_resource::<LoadingMapHandles>();
