@@ -39,6 +39,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use crate::game::GameState;
 use crate::map::{HardcodedMap, SpawnPoints};
 
 // ─── Public surface ──────────────────────────────────────────────────────────
@@ -63,9 +64,17 @@ impl Plugin for MapLoaderPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(MapDir(self.dir.clone()));
         app.add_message::<LoadMapFromUrl>();
+        // Show a blocking overlay as soon as the game enters Playing so the
+        // player never sees an empty world while waiting for the server map.
+        app.add_systems(OnEnter(GameState::Playing), show_waiting_overlay);
         app.add_systems(
             Update,
-            (handle_load_map_event, poll_download, poll_gltf_loaded),
+            (
+                handle_load_map_event,
+                poll_download,
+                poll_gltf_loaded,
+                tick_waiting_timeout,
+            ),
         );
     }
 }
@@ -116,47 +125,83 @@ struct MapLoadingOverlay;
 #[derive(Component)]
 struct MapLoadingLabel;
 
+/// Countdown started when the Playing state is entered.  If a `LoadMapFromUrl`
+/// event arrives before it expires the resource is removed; otherwise the
+/// overlay is dismissed (server has no custom map configured).
+#[derive(Resource)]
+struct WaitingForMapTimeout(Timer);
+
 // ─── Systems ─────────────────────────────────────────────────────────────────
+
+/// Spawns a fully-opaque black overlay the moment the Playing state is entered
+/// so the player never sees an empty world while waiting for the server to
+/// send a map URL.  A 2-second timeout is started; if no map URL arrives by
+/// then the overlay is removed (server has no `--map-url` configured).
+fn show_waiting_overlay(mut commands: Commands) {
+    commands
+        .spawn((
+            Name::new("MapLoadingOverlay"),
+            MapLoadingOverlay,
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 1.0)),
+        ))
+        .with_children(|c| {
+            c.spawn((
+                MapLoadingLabel,
+                Text::new("Waiting for server map..."),
+                TextFont { font_size: 28.0, ..default() },
+                TextColor(Color::WHITE),
+            ));
+        });
+    commands.insert_resource(WaitingForMapTimeout(Timer::from_seconds(
+        2.0,
+        TimerMode::Once,
+    )));
+}
+
+/// Ticks the waiting-for-map timer.  When it fires, the overlay is removed so
+/// the player can at least see the (empty) scene if the server has no map.
+fn tick_waiting_timeout(
+    time: Res<Time>,
+    timeout: Option<ResMut<WaitingForMapTimeout>>,
+    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+    mut commands: Commands,
+) {
+    let Some(mut timeout) = timeout else { return };
+    timeout.0.tick(time.delta());
+    if timeout.0.finished() {
+        for entity in overlay_query.iter() {
+            commands.entity(entity).despawn();
+        }
+        commands.remove_resource::<WaitingForMapTimeout>();
+    }
+}
 
 /// Reacts to `LoadMapFromUrl`, kicks off a background download, and installs
 /// `PendingDownload` so `poll_download` can check on it every frame.
 fn handle_load_map_event(
     mut events: MessageReader<LoadMapFromUrl>,
     mut commands: Commands,
-    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+    mut label_query: Query<&mut Text, With<MapLoadingLabel>>,
 ) {
     for event in events.read() {
         let url = event.0.clone();
         info!("[MAP] Starting download: {}", url);
 
-        // Despawn any stale overlay from a previous load attempt.
-        for entity in overlay_query.iter() {
-            commands.entity(entity).despawn();
+        // Cancel the waiting timeout — a map URL arrived.
+        commands.remove_resource::<WaitingForMapTimeout>();
+
+        // Update the overlay that was spawned by show_waiting_overlay.
+        for mut text in label_query.iter_mut() {
+            **text = "Downloading map...".to_string();
         }
-        // Show a full-screen overlay so the player isn't wandering the
-        // placeholder map while the download is in flight.
-        commands
-            .spawn((
-                Name::new("MapLoadingOverlay"),
-                MapLoadingOverlay,
-                Node {
-                    position_type: PositionType::Absolute,
-                    width: Val::Percent(100.0),
-                    height: Val::Percent(100.0),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.85)),
-            ))
-            .with_children(|c| {
-                c.spawn((
-                    MapLoadingLabel,
-                    Text::new("Downloading map..."),
-                    TextFont { font_size: 28.0, ..default() },
-                    TextColor(Color::WHITE),
-                ));
-            });
 
         let slot: Arc<Mutex<Option<Result<ExtractedMap, String>>>> =
             Arc::new(Mutex::new(None));

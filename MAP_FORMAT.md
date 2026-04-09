@@ -68,8 +68,9 @@ The client spawns it as a Bevy scene, so **everything in it is rendered**.
 1. **File → Export → glTF 2.0 (.glb/.gltf)**
 2. Choose **`.glb`** (binary, single file — simplest).
 3. Under **Include**: check **Selected Objects** only if you want to be selective.
-4. Under **Data → Mesh**: enable **Compression** only if your runtime supports it   
-   (Draco compression is not enabled by default in Bevy).
+4. Under **Data → Mesh**: **DO NOT enable Compression.**  
+   Bevy's GLTF loader does not support `KHR_draco_mesh_compression` and will
+   fail to load any GLB that uses it.  Leave the Compression checkbox **off**.
 5. Under **Data → Images**: set **Format** to **JPEG** or **PNG** and keep **Export** as **Automatic**.  
    If you prefer external textures, set **Image → Export** to **None** and place the textures in the `textures/` directory of the archive.
 
@@ -195,7 +196,7 @@ Any standard HTTPS file server works.  Make sure to:
 
 ## Authoring Checklist
 
-- [ ] `scene.glb` exported from Blender with Y-up, right-handed axes
+- [ ] `scene.glb` exported from Blender with Y-up, right-handed axes (**no Draco compression**)
 - [ ] `collision.glb` contains low-poly, closed meshes (no gaps)
 - [ ] All textures either embedded in GLB or present under `textures/`
 - [ ] `spawn_points.txt` has at least 2 spawn locations, Y ≈ player height above floor
