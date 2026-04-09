@@ -226,7 +226,7 @@ jobs:
 
       - name: Compress WASM with ZSTD (maximum compression)
         run: |
-          zstd --ultra -22 --no-progress \
+          zstd --ultra -22 --long=23 --no-progress \
             web-dist/client_bg.wasm \
             -o web-dist/client_bg.wasm.zst
           mv web-dist/client_bg.wasm.zst web-dist/client_bg.wasm
@@ -248,15 +248,10 @@ jobs:
       # Deploy to Cloudflare Pages only on main branch.
       - name: Deploy to Cloudflare Pages
         if: github.ref == 'refs/heads/main'
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
-          directory: web-dist
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          # Mark the main-branch deployment as "production" in CF Pages.
-          branch: main
+        run: npx wrangler pages deploy web-dist --project-name=${{ secrets.CLOUDFLARE_PAGES_PROJECT }} --branch=main --commit-dirty=true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
   # ── GitHub Release (main branch only, rolling "latest") ─────────────────────
   release:
