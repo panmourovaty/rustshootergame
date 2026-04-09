@@ -6682,6 +6682,7 @@ dependencies = [
  "ruzstd",
  "serde",
  "tar",
+ "tokio",
  "ureq",
  "wasm-bindgen",
  "wasm-bindgen-futures",
