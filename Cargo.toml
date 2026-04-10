@@ -79,7 +79,6 @@ lightyear_aeronet = { version = "0.26", optional = true, default-features = fals
 # so it can use the browser's crypto.getRandomValues() API.
 getrandom = { version = "0.2", features = ["js"] }
 serde = { version = "1", features = ["derive"] }
-clap = { version = "4", features = ["derive"] }
 
 # Map archive loading — pure Rust, compile on all targets.
 ruzstd = "0.8"
@@ -92,8 +91,10 @@ wgpu = { version = "27", default-features = false }
 # Blocking HTTPS client used to download map archives on a background thread.
 ureq = { version = "3", features = ["rustls", "platform-verifier"] }
 # Minimal tokio runtime used to drive the async Identity::load_pemfiles call
-# when the server is started with --cert / --key.
+# when the server loads TLS cert/key from disk.
 tokio = { version = "1", features = ["rt"] }
+# TOML parser for the server configuration file.
+toml = "0.8"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # Used to read window.__RSG_SERVER_ADDR__ set by index.html from server.txt.

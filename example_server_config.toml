@@ -1,0 +1,69 @@
+# RustShooter — Server Configuration
+#
+# Copy this file to server_config.toml (in the same directory as the server
+# binary) and adjust the values you need.
+#
+# The server looks for server_config.toml in the current working directory.
+# You can also point it at a different file by passing the path as the first
+# argument:
+#
+#   ./server /etc/rustshooter/config.toml
+#
+# All fields are optional. Omitting a field (or the entire file) uses the
+# built-in default shown in each comment below.
+
+# ── Network ──────────────────────────────────────────────────────────────────
+
+# UDP port for native (desktop) clients.
+# Default: 7777
+port = 7777
+
+# WebTransport (HTTP/3) port for browser (WASM) clients.
+# Default: 7778
+web_port = 7778
+
+# ── Gameplay ─────────────────────────────────────────────────────────────────
+
+# Number of kills required for the game to end.
+# Once a player reaches this count the game-over screen is shown, then the
+# server automatically resets to the lobby after 10 seconds.
+# Default: 20
+kill_limit = 20
+
+# ── Map ──────────────────────────────────────────────────────────────────────
+
+# HTTPS URL of the map archive (.tar.zst) served to connecting clients.
+# The server streams the file directly from this URL; it is never cached on
+# disk.  When this field is absent, clients fall back to the built-in
+# placeholder map.
+#
+# The archive must be a .tar.zst and may contain:
+#   scene.glb        — 3-D level geometry (required)
+#   skybox.webp      — cubemap sky image: a vertical strip of 6 square faces
+#                      arranged top-to-bottom in this order:
+#                        +X (right), -X (left), +Y (top), -Y (bottom),
+#                        +Z (front), -Z (back)
+#
+# Example:
+# map_url = "https://example.com/maps/mymap.tar.zst"
+
+# ── TLS / WebTransport certificate ───────────────────────────────────────────
+#
+# WebTransport requires TLS.  There are two modes:
+#
+# 1. Self-signed (default — no config needed)
+#    The server generates a fresh ECDSA P-256 certificate on every startup.
+#    Browsers trust it via a SHA-256 fingerprint baked into the WASM client at
+#    compile time.  The W3C spec caps self-signed cert validity at 14 days, so
+#    you must recompile the WASM and restart the server every two weeks.
+#
+# 2. CA-signed (recommended for public servers)
+#    Provide a certificate from a trusted CA (e.g. Let's Encrypt).  Browsers
+#    trust it automatically; no fingerprint is needed and the WASM client never
+#    needs to be recompiled for certificate rotation.
+#
+# To enable CA-signed mode uncomment and fill in both lines below.
+# Both fields must be set together or left unset together.
+#
+# cert = "/etc/letsencrypt/live/play.example.com/fullchain.pem"
+# key  = "/etc/letsencrypt/live/play.example.com/privkey.pem"
