@@ -221,6 +221,7 @@ impl Plugin for GamePlugin {
             Update,
             check_win_condition.run_if(in_state(GameState::Playing)),
         );
+        app.add_systems(OnEnter(GameState::ConnectScreen), reset_session);
     }
 }
 
@@ -252,6 +253,13 @@ fn setup_lighting(mut commands: Commands, ambient: Option<ResMut<GlobalAmbientLi
         Transform::from_xyz(0.0, 100.0, 0.0)
             .looking_at(Vec3::new(-30.0, 0.0, -30.0), Vec3::Z),
     ));
+}
+
+/// Clears per-session state so a returning player starts fresh.
+/// Runs on every entry to ConnectScreen (initial load, game-over return, cancel).
+fn reset_session(mut scores: ResMut<Scores>, mut player_names: ResMut<PlayerNames>) {
+    *scores = Scores::default();
+    *player_names = PlayerNames::default();
 }
 
 pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: MessageReader<KillEvent>) {
