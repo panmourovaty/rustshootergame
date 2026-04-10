@@ -207,7 +207,7 @@ fn spawn_ammo_display(parent: &mut ChildSpawnerCommands) {
 fn spawn_reloading_text(parent: &mut ChildSpawnerCommands) {
     parent.spawn((
         Name::new("ReloadingText"),
-        Text::new("RELOADING…"),
+        Text::new("RELOADING..."),
         TextFont {
             font_size: 20.0,
             ..default()
