@@ -63,7 +63,6 @@ impl Plugin for ClientNetworkPlugin {
         // Register messages and channels AFTER ClientPlugins.
         app.add_plugins(ProtocolPlugin);
 
-        app.add_systems(OnEnter(GameState::ConnectScreen), disconnect_client);
         app.add_systems(OnEnter(GameState::Connecting), start_connecting);
         app.add_systems(OnExit(GameState::Connecting), cleanup_pending_client);
         app.add_systems(
@@ -203,7 +202,7 @@ fn start_connecting(
 }
 
 fn check_connected(
-    query: Query<Entity, (With<PendingClient>, With<Connected>)>,
+    query: Query<Entity, (With<PendingClient>, Added<Connected>)>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
     if query.iter().next().is_some() {
@@ -238,20 +237,6 @@ fn cleanup_pending_client(
         }
     }
     commands.remove_resource::<ConnectTimeout>();
-}
-
-/// Despawns all lightyear client entities (connected or pending) when returning
-/// to the connect screen.  This ensures no stale client entity persists across
-/// sessions, which would cause duplicate `Connect` triggers and server confusion
-/// on the next connection attempt.
-fn disconnect_client(
-    mut commands: Commands,
-    query: Query<Entity, With<PendingClient>>,
-) {
-    for entity in query.iter() {
-        commands.entity(entity).despawn();
-        info!("disconnect_client: despawned client entity {:?}", entity);
-    }
 }
 
 // ─── WASM-only: hostname WebTransport support ────────────────────────────────

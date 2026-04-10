@@ -128,59 +128,6 @@ impl Scores {
 #[derive(Resource, Default)]
 pub struct PlayerNames(pub HashMap<u64, String>);
 
-// ─── Settings ────────────────────────────────────────────────────────────────
-
-/// Sensitivity steps expressed as actual radians-per-pixel values.
-/// Index 1 (0.002) matches the historical hardcoded default.
-pub const SENSITIVITY_STEPS: [f32; 6] = [0.001, 0.002, 0.003, 0.004, 0.005, 0.006];
-pub const SENSITIVITY_LABELS: [&str; 6] = ["0.5x", "1x", "1.5x", "2x", "2.5x", "3x"];
-
-#[derive(Clone, Copy, PartialEq, Debug, Default)]
-pub enum MsaaSetting {
-    #[default]
-    Off,
-    Sample4,
-}
-
-impl MsaaSetting {
-    pub fn label(self) -> &'static str {
-        match self {
-            MsaaSetting::Off => "Off",
-            MsaaSetting::Sample4 => "4x",
-        }
-    }
-    pub fn next(self) -> Self {
-        match self {
-            MsaaSetting::Off => MsaaSetting::Sample4,
-            MsaaSetting::Sample4 => MsaaSetting::Off,
-        }
-    }
-}
-
-#[derive(Resource)]
-pub struct GameSettings {
-    /// Index into SENSITIVITY_STEPS / SENSITIVITY_LABELS.
-    pub sensitivity_idx: usize,
-    pub msaa: MsaaSetting,
-    pub fullscreen: bool,
-}
-
-impl Default for GameSettings {
-    fn default() -> Self {
-        Self {
-            sensitivity_idx: 1, // 1× = 0.002 rad/px (historical default)
-            msaa: MsaaSetting::Off,
-            fullscreen: false,
-        }
-    }
-}
-
-impl GameSettings {
-    pub fn mouse_sensitivity(&self) -> f32 {
-        SENSITIVITY_STEPS[self.sensitivity_idx]
-    }
-}
-
 // ─── Events ─────────────────────────────────────────────────────────────────
 
 /// Emitted when a kill is confirmed, so UI and score tracking can react.
@@ -201,7 +148,6 @@ impl Plugin for GamePlugin {
         app.init_resource::<ConnectionError>();
         app.init_resource::<PlayerNames>();
         app.add_message::<KillEvent>();
-        app.init_resource::<GameSettings>();
 
         app.add_systems(Startup, setup_lighting);
 
@@ -221,7 +167,6 @@ impl Plugin for GamePlugin {
             Update,
             check_win_condition.run_if(in_state(GameState::Playing)),
         );
-        app.add_systems(OnEnter(GameState::ConnectScreen), reset_session);
     }
 }
 
@@ -253,13 +198,6 @@ fn setup_lighting(mut commands: Commands, ambient: Option<ResMut<GlobalAmbientLi
         Transform::from_xyz(0.0, 100.0, 0.0)
             .looking_at(Vec3::new(-30.0, 0.0, -30.0), Vec3::Z),
     ));
-}
-
-/// Clears per-session state so a returning player starts fresh.
-/// Runs on every entry to ConnectScreen (initial load, game-over return, cancel).
-fn reset_session(mut scores: ResMut<Scores>, mut player_names: ResMut<PlayerNames>) {
-    *scores = Scores::default();
-    *player_names = PlayerNames::default();
 }
 
 pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: MessageReader<KillEvent>) {
