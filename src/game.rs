@@ -167,6 +167,7 @@ impl Plugin for GamePlugin {
             Update,
             check_win_condition.run_if(in_state(GameState::Playing)),
         );
+        app.add_systems(OnEnter(GameState::ConnectScreen), reset_scores);
     }
 }
 
@@ -211,6 +212,14 @@ pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: MessageReader<K
             scores.get_kills(ev.killer_id)
         );
     }
+}
+
+/// Clears scores and player names so a reconnecting player starts fresh
+/// instead of seeing the game-over screen from the previous round.
+fn reset_scores(mut scores: ResMut<Scores>, mut player_names: ResMut<PlayerNames>) {
+    scores.kills.clear();
+    scores.deaths.clear();
+    player_names.0.clear();
 }
 
 fn check_win_condition(
