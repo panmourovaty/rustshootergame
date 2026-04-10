@@ -133,7 +133,7 @@ pub struct PlayerNames(pub HashMap<u64, String>);
 /// Sensitivity steps expressed as actual radians-per-pixel values.
 /// Index 1 (0.002) matches the historical hardcoded default.
 pub const SENSITIVITY_STEPS: [f32; 6] = [0.001, 0.002, 0.003, 0.004, 0.005, 0.006];
-pub const SENSITIVITY_LABELS: [&str; 6] = ["0.5×", "1×", "1.5×", "2×", "2.5×", "3×"];
+pub const SENSITIVITY_LABELS: [&str; 6] = ["0.5x", "1x", "1.5x", "2x", "2.5x", "3x"];
 
 #[derive(Clone, Copy, PartialEq, Debug, Default)]
 pub enum MsaaSetting {
@@ -146,7 +146,7 @@ impl MsaaSetting {
     pub fn label(self) -> &'static str {
         match self {
             MsaaSetting::Off => "Off",
-            MsaaSetting::Sample4 => "4×",
+            MsaaSetting::Sample4 => "4x",
         }
     }
     pub fn next(self) -> Self {

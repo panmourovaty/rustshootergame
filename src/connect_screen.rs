@@ -308,7 +308,7 @@ fn spawn_connect_screen(
 
                 // ── Hint ───────────────────────────────────────────────────
                 panel.spawn((
-                    Text::new("Click a field to type  •  Enter or click CONNECT to join"),
+                    Text::new("Click a field to type - Enter or click CONNECT to join"),
                     TextFont { font_size: 12.0, ..default() },
                     TextColor(Color::srgb(0.45, 0.45, 0.45)),
                     Node {
@@ -389,7 +389,7 @@ fn spawn_connect_screen(
                             ))
                             .with_children(|btn| {
                                 btn.spawn((
-                                    Text::new("◄"),
+                                    Text::new("<"),
                                     TextFont { font_size: 14.0, ..default() },
                                     TextColor(Color::WHITE),
                                 ));
@@ -423,7 +423,7 @@ fn spawn_connect_screen(
                             ))
                             .with_children(|btn| {
                                 btn.spawn((
-                                    Text::new("►"),
+                                    Text::new(">"),
                                     TextFont { font_size: 14.0, ..default() },
                                     TextColor(Color::WHITE),
                                 ));
@@ -465,7 +465,7 @@ fn spawn_connect_screen(
                         .with_children(|btn| {
                             btn.spawn((
                                 Name::new("AaDisplay"),
-                                Text::new(format!("{}  ▶", settings.msaa.label())),
+                                Text::new(format!("{} >", settings.msaa.label())),
                                 TextFont { font_size: 16.0, ..default() },
                                 TextColor(Color::WHITE),
                                 AaDisplay,
@@ -505,7 +505,7 @@ fn spawn_connect_screen(
                             BackgroundColor(Color::srgb(0.22, 0.22, 0.32)),
                         ))
                         .with_children(|btn| {
-                            let label = if settings.fullscreen { "On  ▶" } else { "Off  ▶" };
+                            let label = if settings.fullscreen { "On >" } else { "Off >" };
                             btn.spawn((
                                 Name::new("FullscreenDisplay"),
                                 Text::new(label),
@@ -534,7 +534,7 @@ fn spawn_connect_screen(
                     ))
                     .with_children(|btn| {
                         btn.spawn((
-                            Text::new("← Back"),
+                            Text::new("< Back"),
                             TextFont { font_size: 22.0, ..default() },
                             TextColor(Color::WHITE),
                         ));
@@ -593,12 +593,12 @@ fn spawn_connecting_screen(mut commands: Commands, profile: Res<PlayerProfile>) 
             ))
             .with_children(|panel| {
                 panel.spawn((
-                    Text::new("Connecting…"),
+                    Text::new("Connecting..."),
                     TextFont { font_size: 32.0, ..default() },
                     TextColor(Color::WHITE),
                 ));
                 panel.spawn((
-                    Text::new(format!("→ {}", profile.server_addr)),
+                    Text::new(format!("-> {}", profile.server_addr)),
                     TextFont { font_size: 18.0, ..default() },
                     TextColor(Color::srgb(0.6, 0.6, 0.6)),
                 ));
@@ -882,13 +882,13 @@ fn update_settings_displays(
         **text = SENSITIVITY_LABELS[settings.sensitivity_idx].to_string();
     }
     for mut text in aa_q.iter_mut() {
-        **text = format!("{}  ▶", settings.msaa.label());
+        **text = format!("{} >", settings.msaa.label());
     }
     for mut text in fs_q.iter_mut() {
         **text = if settings.fullscreen {
-            "On  ▶".to_string()
+            "On >".to_string()
         } else {
-            "Off  ▶".to_string()
+            "Off >".to_string()
         };
     }
 }
