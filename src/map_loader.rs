@@ -102,13 +102,11 @@ struct ExtractedMap {
 #[derive(Resource)]
 struct PendingDownload(Arc<Mutex<Option<Result<ExtractedMap, String>>>>);
 
-/// Resource present while we wait for the GLTF handles to finish loading.
+/// Resource present while we wait for the GLTF scene handle to finish loading.
 #[derive(Resource)]
 struct LoadingMapHandles {
     scene: Handle<Gltf>,
-    collision: Option<Handle<Gltf>>,
     scene_loaded: bool,
-    collision_loaded: bool,
 }
 
 /// Marker for entities spawned by the dynamic map so they can be cleaned up
@@ -286,20 +284,11 @@ fn poll_download(
                 map_dir.0.insert_asset(Path::new(path_str), data.clone());
             }
 
-            // Begin loading the GLTF assets.
+            // Begin loading scene.glb — colliders are generated from its meshes.
             let scene_handle: Handle<Gltf> = asset_server.load("map://scene.glb");
-            let collision_handle = if extracted.files.contains_key("collision.glb") {
-                Some(asset_server.load::<Gltf>("map://collision.glb"))
-            } else {
-                warn!("[MAP] collision.glb not found in archive; no physics will be set up");
-                None
-            };
-
             commands.insert_resource(LoadingMapHandles {
                 scene: scene_handle,
-                collision: collision_handle,
                 scene_loaded: false,
-                collision_loaded: false,
             });
         }
     }
@@ -328,21 +317,14 @@ fn poll_gltf_loaded(
                 loading.scene_loaded = true;
                 info!("[MAP] scene.glb loaded");
             }
-            if let Some(col) = &loading.collision {
-                if *id == col.id() {
-                    loading.collision_loaded = true;
-                    info!("[MAP] collision.glb loaded");
-                }
-            }
         }
     }
 
-    let collision_ready = loading.collision.is_none() || loading.collision_loaded;
-    if !loading.scene_loaded || !collision_ready {
+    if !loading.scene_loaded {
         return;
     }
 
-    info!("[MAP] All GLTF files ready — swapping map");
+    info!("[MAP] GLTF ready — swapping map");
 
     // Despawn the previous dynamic map (if any).
     for entity in dynamic_query.iter() {
@@ -353,7 +335,8 @@ fn poll_gltf_loaded(
         commands.entity(entity).despawn();
     }
 
-    // Spawn visual scene.
+    // Spawn the visual scene and attach ColliderConstructorHierarchy so
+    // Avian3D automatically generates trimesh colliders for every mesh in it.
     if let Some(gltf) = gltf_assets.get(&loading.scene) {
         let scene_handle = gltf
             .default_scene
@@ -362,33 +345,12 @@ fn poll_gltf_loaded(
             .expect("scene.glb has no scenes");
 
         commands.spawn((
-            Name::new("DynamicMap_Visual"),
+            Name::new("DynamicMap"),
             DynamicMap,
             SceneRoot(scene_handle),
+            ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh),
         ));
-        info!("[MAP] Visual scene spawned");
-    }
-
-    // Spawn collision scene (invisible, physics only).
-    if let Some(col_handle) = &loading.collision {
-        if let Some(gltf) = gltf_assets.get(col_handle) {
-            let scene_handle = gltf
-                .default_scene
-                .clone()
-                .or_else(|| gltf.scenes.first().cloned())
-                .expect("collision.glb has no scenes");
-
-            commands.spawn((
-                Name::new("DynamicMap_Collision"),
-                DynamicMap,
-                SceneRoot(scene_handle),
-                // Auto-generate trimesh colliders for every mesh in the scene.
-                ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh),
-                // Render nothing — this scene is physics-only.
-                Visibility::Hidden,
-            ));
-            info!("[MAP] Collision scene spawned with ColliderConstructorHierarchy");
-        }
+        info!("[MAP] Map scene spawned with trimesh colliders");
     }
 
     // Map is live — remove the loading overlay.
