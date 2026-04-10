@@ -193,8 +193,8 @@ fn show_waiting_overlay(mut commands: Commands) {
 fn tick_waiting_timeout(
     time: Res<Time>,
     timeout: Option<ResMut<WaitingForMapTimeout>>,
-    mut overlay_query: Query<(Entity, &mut Visibility), With<MapLoadingOverlay>>,
-    mut label_query: Query<(Entity, &mut Visibility), With<MapLoadingLabel>>,
+    mut overlay_query: Query<(Entity, &mut Visibility), (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
+    mut label_query: Query<(Entity, &mut Visibility), (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
     mut commands: Commands,
 ) {
     let Some(mut timeout) = timeout else { return };
@@ -261,8 +261,8 @@ fn poll_download(
     mut images: ResMut<Assets<Image>>,
     mut spawn_points: ResMut<SpawnPoints>,
     mut commands: Commands,
-    mut overlay_query: Query<(Entity, &mut Visibility), With<MapLoadingOverlay>>,
-    mut label_vis_query: Query<(Entity, &mut Visibility), With<MapLoadingLabel>>,
+    mut overlay_query: Query<(Entity, &mut Visibility), (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
+    mut label_vis_query: Query<(Entity, &mut Visibility), (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
     mut label_query: Query<&mut Text, With<MapLoadingLabel>>,
 ) {
     let Some(pending) = pending else { return };
@@ -456,8 +456,8 @@ fn attach_map_colliders(
     mesh_query: Query<&Mesh3d>,
     spawn_points: Res<SpawnPoints>,
     mut player_query: Query<(&mut Transform, &mut LinearVelocity), With<LocalPlayer>>,
-    mut overlay_query: Query<(Entity, &mut Visibility), With<MapLoadingOverlay>>,
-    mut label_query: Query<(Entity, &mut Visibility), With<MapLoadingLabel>>,
+    mut overlay_query: Query<(Entity, &mut Visibility), (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
+    mut label_query: Query<(Entity, &mut Visibility), (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
     mut commands: Commands,
 ) {
     let Some(pending) = pending else { return };
@@ -549,8 +549,8 @@ fn apply_skybox(
 /// log a warning.  In that race, the immediate `Visibility::Hidden` guarantees
 /// the overlay disappears even if the despawn is a no-op.
 fn hide_and_despawn_overlay(
-    overlay_query: &mut Query<(Entity, &mut Visibility), With<MapLoadingOverlay>>,
-    label_query: &mut Query<(Entity, &mut Visibility), With<MapLoadingLabel>>,
+    overlay_query: &mut Query<(Entity, &mut Visibility), (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
+    label_query: &mut Query<(Entity, &mut Visibility), (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
     commands: &mut Commands,
 ) {
     let overlay_entities: Vec<Entity> = overlay_query
