@@ -25,6 +25,12 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 #[cfg(target_arch = "wasm32")]
 use std::net::SocketAddr;
 
+// WASM-only imports for the hostname-based WebTransport path.
+#[cfg(target_arch = "wasm32")]
+use lightyear_aeronet::AeronetLinkOf;
+#[cfg(target_arch = "wasm32")]
+use aeronet_webtransport::client::{ClientConfig as WtClientConfig, WebTransportClient};
+
 use super::protocol::{
     GameChannel, HitMsg, JoinMsg, KillNotifyMsg, MapUrlMsg, PlayerJoinMsg, PlayerLeaveMsg,
     PosChannel, PosUpdateMsg, ProtocolPlugin, RelayedPosMsg, TakeDamageMsg, PROTOCOL_ID,
@@ -64,6 +70,11 @@ impl Plugin for ClientNetworkPlugin {
             (check_connected, tick_timeout).run_if(in_state(GameState::Connecting)),
         );
 
+        // WASM: custom observer that connects via a string URL instead of
+        // PeerAddr(SocketAddr), supporting both IP addresses and hostnames.
+        #[cfg(target_arch = "wasm32")]
+        app.add_observer(wt_hostname_link);
+
         // Playing-state systems.
         app.add_systems(OnEnter(GameState::Playing), send_join_msg);
         app.add_systems(
@@ -95,38 +106,99 @@ struct ConnectTimeout(Timer);
 #[derive(Resource, Default)]
 struct PosUpdateTimer(f32);
 
+/// WASM-only: carry the full WebTransport URL string and the certificate digest
+/// so our custom `wt_hostname_link` observer can connect using a hostname
+/// (lightyear's built-in `WebTransportClientIo` only accepts `PeerAddr(SocketAddr)`
+/// which cannot represent hostnames).
+#[cfg(target_arch = "wasm32")]
+#[derive(Component)]
+#[require(Link)]
+struct WebTransportHostname {
+    url: String,
+    cert_digest: String,
+}
+
 // ─── Connection systems ──────────────────────────────────────────────────────
 
-fn start_connecting(mut commands: Commands, profile: Res<PlayerProfile>) {
+fn start_connecting(
+    mut commands: Commands,
+    profile: Res<PlayerProfile>,
+    mut next_state: ResMut<NextState<GameState>>,
+    mut conn_error: ResMut<ConnectionError>,
+) {
+    // Insert ConnectTimeout FIRST — before any early return — so that
+    // tick_timeout never panics with "Resource does not exist".
+    commands.insert_resource(ConnectTimeout(Timer::from_seconds(15.0, TimerMode::Once)));
+    commands.init_resource::<PosUpdateTimer>();
+
     let addr_str = append_default_port(&profile.server_addr);
 
-    let server_addr: SocketAddr = match resolve_addr(&addr_str) {
-        Ok(a) => a,
-        Err(e) => {
-            error!("Cannot resolve '{}': {}", addr_str, e);
-            return;
-        }
-    };
+    // ── Platform-specific connection setup ────────────────────────────────────
 
-    let auth = Authentication::Manual {
-        server_addr,
-        client_id: random_client_id(),
-        private_key: [0u8; 32],
-        protocol_id: PROTOCOL_ID,
-    };
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let server_addr: SocketAddr = match resolve_addr(&addr_str) {
+            Ok(a) => a,
+            Err(e) => {
+                let msg = format!("Cannot resolve '{}': {}", addr_str, e);
+                error!("{}", msg);
+                conn_error.0 = Some(msg);
+                next_state.set(GameState::ConnectScreen);
+                return;
+            }
+        };
 
-    match NetcodeClient::new(auth, NetcodeConfig::default()) {
-        Ok(netcode_client) => {
-            spawn_transport(&mut commands, server_addr, netcode_client, &profile);
-            info!("Connecting to {} as '{}'…", server_addr, profile.username);
-        }
-        Err(e) => {
-            error!("Failed to create NetcodeClient: {:?}", e);
+        let auth = Authentication::Manual {
+            server_addr,
+            client_id: random_client_id(),
+            private_key: [0u8; 32],
+            protocol_id: PROTOCOL_ID,
+        };
+
+        match NetcodeClient::new(auth, NetcodeConfig::default()) {
+            Ok(netcode_client) => {
+                spawn_transport(&mut commands, server_addr, netcode_client, &profile);
+                info!("Connecting to {} as '{}'…", server_addr, profile.username);
+            }
+            Err(e) => {
+                let msg = format!("Failed to create NetcodeClient: {:?}", e);
+                error!("{}", msg);
+                conn_error.0 = Some(msg);
+                next_state.set(GameState::ConnectScreen);
+            }
         }
     }
 
-    commands.insert_resource(ConnectTimeout(Timer::from_seconds(15.0, TimerMode::Once)));
-    commands.init_resource::<PosUpdateTimer>();
+    #[cfg(target_arch = "wasm32")]
+    {
+        // In WASM, SocketAddr::parse() only works for IP:port.  For hostnames
+        // (e.g. "rsgsrv.hejl.xyz:7778") we cannot do synchronous DNS.
+        // We use a dummy SocketAddr carrying the right port for the netcode
+        // connect-token; the server does not validate server_addresses in the
+        // token (that check is commented out in lightyear_netcode), so any
+        // valid SocketAddr is accepted.
+        let netcode_addr = wasm_netcode_addr(&addr_str);
+
+        let auth = Authentication::Manual {
+            server_addr: netcode_addr,
+            client_id: random_client_id(),
+            private_key: [0u8; 32],
+            protocol_id: PROTOCOL_ID,
+        };
+
+        match NetcodeClient::new(auth, NetcodeConfig::default()) {
+            Ok(netcode_client) => {
+                spawn_transport(&mut commands, &addr_str, netcode_client, &profile);
+                info!("Connecting to https://{} as '{}'…", addr_str, profile.username);
+            }
+            Err(e) => {
+                let msg = format!("Failed to create NetcodeClient: {:?}", e);
+                error!("{}", msg);
+                conn_error.0 = Some(msg);
+                next_state.set(GameState::ConnectScreen);
+            }
+        }
+    }
 }
 
 fn check_connected(
@@ -141,10 +213,13 @@ fn check_connected(
 
 fn tick_timeout(
     time: Res<Time>,
-    mut timer: ResMut<ConnectTimeout>,
+    // Wrapped in Option: ConnectTimeout is inserted by start_connecting but
+    // there is a window (same frame as OnEnter) where it may not yet exist.
+    timer: Option<ResMut<ConnectTimeout>>,
     mut next_state: ResMut<NextState<GameState>>,
     mut conn_error: ResMut<ConnectionError>,
 ) {
+    let Some(mut timer) = timer else { return };
     timer.0.tick(time.delta());
     if timer.0.just_finished() {
         conn_error.0 = Some("Connection timed out.".to_string());
@@ -162,6 +237,109 @@ fn cleanup_pending_client(
         }
     }
     commands.remove_resource::<ConnectTimeout>();
+}
+
+// ─── WASM-only: hostname WebTransport support ────────────────────────────────
+
+/// Derive a SocketAddr suitable for the netcode connect-token from an
+/// address string that may be either IP:port or hostname:port.
+///
+/// If the string is already a valid SocketAddr we use it directly.
+/// Otherwise we extract the port (defaulting to 7778) and return
+/// `0.0.0.0:<port>` as a dummy.  The lightyear_netcode server does not
+/// validate the server_addresses field in the connect token (that check is
+/// commented out), so any SocketAddr is accepted.
+#[cfg(target_arch = "wasm32")]
+fn wasm_netcode_addr(addr_str: &str) -> SocketAddr {
+    if let Ok(sa) = addr_str.parse::<SocketAddr>() {
+        return sa;
+    }
+    let port = addr_str
+        .rfind(':')
+        .and_then(|i| addr_str[i + 1..].parse::<u16>().ok())
+        .unwrap_or(7778);
+    SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), port)
+}
+
+/// Build a `ClientConfig` (= `xwt_web::WebTransportOptions`) for WASM.
+///
+/// `cert_hex` should be the hex-encoded SHA-256 digest of the server's
+/// self-signed certificate, or empty when using a CA-signed certificate.
+#[cfg(target_arch = "wasm32")]
+fn build_wt_client_config(cert_hex: &str) -> Result<WtClientConfig, String> {
+    use aeronet_webtransport::xwt_web::{CertificateHash, HashAlgorithm};
+
+    let hashes = if cert_hex.is_empty() {
+        vec![]
+    } else {
+        let bytes = hex_decode(cert_hex)?;
+        vec![CertificateHash {
+            algorithm: HashAlgorithm::Sha256,
+            value: bytes,
+        }]
+    };
+    Ok(WtClientConfig {
+        server_certificate_hashes: hashes,
+        ..Default::default()
+    })
+}
+
+#[cfg(target_arch = "wasm32")]
+fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
+    if s.len() % 2 != 0 {
+        return Err(format!("Odd-length hex string: \"{}\"", s));
+    }
+    s.as_bytes()
+        .chunks(2)
+        .map(|pair| {
+            let hi = hex_nibble(pair[0])?;
+            let lo = hex_nibble(pair[1])?;
+            Ok((hi << 4) | lo)
+        })
+        .collect()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn hex_nibble(b: u8) -> Result<u8, String> {
+    match b {
+        b'0'..=b'9' => Ok(b - b'0'),
+        b'a'..=b'f' => Ok(b - b'a' + 10),
+        b'A'..=b'F' => Ok(b - b'A' + 10),
+        _ => Err(format!("Invalid hex byte: 0x{:02x}", b)),
+    }
+}
+
+/// Observer that handles `LinkStart` for entities carrying `WebTransportHostname`.
+///
+/// This mirrors `lightyear_webtransport::client::WebTransportClientPlugin::link`
+/// but builds the connection URL directly from the stored string, so hostnames
+/// are supported in addition to raw IP addresses.
+#[cfg(target_arch = "wasm32")]
+fn wt_hostname_link(
+    trigger: On<LinkStart>,
+    query: Query<(Entity, &WebTransportHostname), (Without<Linking>, Without<Linked>)>,
+    mut commands: Commands,
+) {
+    let Ok((entity, wt)) = query.get(trigger.entity()) else {
+        return;
+    };
+    let url = wt.url.clone();
+    let cert_digest = wt.cert_digest.clone();
+
+    commands.queue(move |world: &mut World| {
+        let config = match build_wt_client_config(&cert_digest) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("WebTransport config error: {}", e);
+                return;
+            }
+        };
+        let mut aeronet_entity = world.spawn((
+            AeronetLinkOf(entity),
+            Name::from("WebTransportClient"),
+        ));
+        WebTransportClient::connect(config, url).apply(&mut aeronet_entity);
+    });
 }
 
 // ─── Playing-state systems ───────────────────────────────────────────────────
@@ -372,11 +550,6 @@ fn resolve_addr(addr_str: &str) -> Result<SocketAddr, String> {
         .ok_or_else(|| format!("No address resolved for '{}'", addr_str))
 }
 
-#[cfg(target_arch = "wasm32")]
-fn resolve_addr(addr_str: &str) -> Result<SocketAddr, String> {
-    addr_str.parse::<SocketAddr>().map_err(|e| e.to_string())
-}
-
 // ─── Transport selection ─────────────────────────────────────────────────────
 
 /// Native: UDP transport.
@@ -406,32 +579,38 @@ fn spawn_transport(
     info!("Using UDP transport → {}", server_addr);
 }
 
-/// WASM: WebTransport transport.
+/// WASM: WebTransport transport using a full URL string.
 ///
-/// The server address is formatted as an HTTPS URL for the browser's
-/// WebTransport API.  `RSG_CERT_DIGEST` must be set at compile time to the
-/// SHA-256 fingerprint (hex, no colons) of the server's self-signed cert.
-/// Leave it empty when the server uses a CA-signed certificate.
+/// Unlike the native path, this uses `WebTransportHostname` instead of
+/// `WebTransportClientIo` + `PeerAddr(SocketAddr)`.  A custom observer
+/// (`wt_hostname_link`) handles `LinkStart` for these entities and builds the
+/// WebTransport connection from `url` directly, so both IP addresses and
+/// hostnames are supported.
+///
+/// `RSG_CERT_DIGEST` must be set at compile time to the SHA-256 fingerprint
+/// of the server's self-signed cert (hex, no colons).  Leave it unset when
+/// the server uses a CA-signed certificate.
 #[cfg(target_arch = "wasm32")]
 fn spawn_transport(
     commands: &mut Commands,
-    server_addr: SocketAddr,
+    addr_str: &str,
     netcode_client: NetcodeClient,
     _profile: &PlayerProfile,
 ) {
-    use lightyear::prelude::client::{Connect, WebTransportClientIo};
+    use lightyear::prelude::client::Connect;
 
-    let certificate_digest = option_env!("RSG_CERT_DIGEST")
+    let cert_digest = option_env!("RSG_CERT_DIGEST")
         .unwrap_or("")
         .to_string();
+
+    let url = format!("https://{addr_str}");
 
     let entity = commands.spawn((
         Name::new("GameClient"),
         PendingClient,
-        WebTransportClientIo { certificate_digest },
-        PeerAddr(server_addr),
+        WebTransportHostname { url: url.clone(), cert_digest },
         netcode_client,
     )).id();
     commands.trigger(Connect { entity });
-    info!("Using WebTransport → https://{}", server_addr);
+    info!("Using WebTransport → {}", url);
 }
