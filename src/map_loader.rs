@@ -72,6 +72,7 @@ impl Plugin for MapLoaderPlugin {
         // Show a blocking overlay as soon as the game enters Playing so the
         // player never sees an empty world while waiting for the server map.
         app.add_systems(OnEnter(GameState::Playing), show_waiting_overlay);
+        app.add_systems(OnExit(GameState::Playing), cleanup_loading_overlay);
         app.add_systems(
             Update,
             (
@@ -193,14 +194,14 @@ fn show_waiting_overlay(mut commands: Commands) {
 fn tick_waiting_timeout(
     time: Res<Time>,
     timeout: Option<ResMut<WaitingForMapTimeout>>,
-    mut overlay_query: Query<(Entity, &mut Visibility), (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
-    mut label_query: Query<(Entity, &mut Visibility), (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
+    mut overlay_query: Query<&mut Visibility, (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
+    mut label_query: Query<&mut Visibility, (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
     mut commands: Commands,
 ) {
     let Some(mut timeout) = timeout else { return };
     timeout.0.tick(time.delta());
     if timeout.0.just_finished() {
-        hide_and_despawn_overlay(&mut overlay_query, &mut label_query, &mut commands);
+        hide_overlay(&mut overlay_query, &mut label_query);
         commands.remove_resource::<WaitingForMapTimeout>();
     }
 }
@@ -261,8 +262,8 @@ fn poll_download(
     mut images: ResMut<Assets<Image>>,
     mut spawn_points: ResMut<SpawnPoints>,
     mut commands: Commands,
-    mut overlay_query: Query<(Entity, &mut Visibility), (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
-    mut label_vis_query: Query<(Entity, &mut Visibility), (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
+    mut overlay_query: Query<&mut Visibility, (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
+    mut label_vis_query: Query<&mut Visibility, (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
     mut label_query: Query<&mut Text, With<MapLoadingLabel>>,
 ) {
     let Some(pending) = pending else { return };
@@ -278,8 +279,8 @@ fn poll_download(
     match result {
         Err(e) => {
             error!("[MAP] Download/extract failed: {}", e);
-            // Remove the overlay — don't leave a black screen on failure.
-            hide_and_despawn_overlay(&mut overlay_query, &mut label_vis_query, &mut commands);
+            // Hide the overlay — don't leave a black screen on failure.
+            hide_overlay(&mut overlay_query, &mut label_vis_query);
         }
         Ok(extracted) => {
             info!("[MAP] Extracted {} files; inserting into map:// source", extracted.files.len());
@@ -456,8 +457,8 @@ fn attach_map_colliders(
     mesh_query: Query<&Mesh3d>,
     spawn_points: Res<SpawnPoints>,
     mut player_query: Query<(&mut Transform, &mut LinearVelocity), With<LocalPlayer>>,
-    mut overlay_query: Query<(Entity, &mut Visibility), (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
-    mut label_query: Query<(Entity, &mut Visibility), (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
+    mut overlay_query: Query<&mut Visibility, (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
+    mut label_query: Query<&mut Visibility, (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
     mut commands: Commands,
 ) {
     let Some(pending) = pending else { return };
@@ -516,8 +517,8 @@ fn attach_map_colliders(
     // invisible from the very next render frame onward.
     let overlay_n = overlay_query.iter().count();
     let label_n = label_query.iter().count();
-    info!("[MAP] Revealing scene ({} overlay, {} label entities dismissed)", overlay_n, label_n);
-    hide_and_despawn_overlay(&mut overlay_query, &mut label_query, &mut commands);
+    info!("[MAP] Revealing scene ({} overlay, {} label entities hidden)", overlay_n, label_n);
+    hide_overlay(&mut overlay_query, &mut label_query);
 }
 
 /// Attaches the `Skybox` component to the player's camera once the cubemap
@@ -540,37 +541,37 @@ fn apply_skybox(
 }
 
 /// Immediately hides the loading overlay and its text label by setting
-/// `Visibility::Hidden` directly (synchronous — takes effect this render
-/// frame), then queues a deferred `despawn()` for cleanup.
+/// `Visibility::Hidden` directly (synchronous, not deferred through Commands).
+/// This guarantees the overlay disappears from the very next render frame.
 ///
-/// Hiding synchronously is important because `despawn()` is deferred through
-/// `Commands` — if another system in the same frame already queued a despawn
-/// for the same entity, our despawn command will hit a stale entity ID and
-/// log a warning.  In that race, the immediate `Visibility::Hidden` guarantees
-/// the overlay disappears even if the despawn is a no-op.
-fn hide_and_despawn_overlay(
-    overlay_query: &mut Query<(Entity, &mut Visibility), (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
-    label_query: &mut Query<(Entity, &mut Visibility), (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
-    commands: &mut Commands,
+/// Cleanup (actual despawn) is handled separately by `cleanup_loading_overlay`
+/// which runs on `OnExit(GameState::Playing)` — a point where no in-flight
+/// Commands can conflict with the despawn.
+fn hide_overlay(
+    overlay_query: &mut Query<&mut Visibility, (With<MapLoadingOverlay>, Without<MapLoadingLabel>)>,
+    label_query: &mut Query<&mut Visibility, (With<MapLoadingLabel>, Without<MapLoadingOverlay>)>,
 ) {
-    let overlay_entities: Vec<Entity> = overlay_query
-        .iter_mut()
-        .map(|(entity, mut vis)| {
-            *vis = Visibility::Hidden;
-            entity
-        })
-        .collect();
-    let label_entities: Vec<Entity> = label_query
-        .iter_mut()
-        .map(|(entity, mut vis)| {
-            *vis = Visibility::Hidden;
-            entity
-        })
-        .collect();
-    for entity in overlay_entities {
+    for mut vis in overlay_query.iter_mut() {
+        *vis = Visibility::Hidden;
+    }
+    for mut vis in label_query.iter_mut() {
+        *vis = Visibility::Hidden;
+    }
+}
+
+/// Despawns any leftover loading overlay / label entities when leaving the
+/// Playing state.  Runs after Update's deferred commands have been flushed,
+/// so there is no risk of despawning an entity that was just queued for
+/// despawn by another system in the same frame.
+fn cleanup_loading_overlay(
+    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+    label_query: Query<Entity, With<MapLoadingLabel>>,
+    mut commands: Commands,
+) {
+    for entity in overlay_query.iter() {
         commands.entity(entity).despawn();
     }
-    for entity in label_entities {
+    for entity in label_query.iter() {
         commands.entity(entity).despawn();
     }
 }
