@@ -177,7 +177,7 @@ impl Plugin for GamePlugin {
 /// The sun is positioned 100 m above the origin and angled ≈ 30° off vertical
 /// (toward negative X/Z) so shadows always have a clear direction rather than
 /// pointing straight down.
-fn setup_lighting(mut commands: Commands, mut ambient: ResMut<AmbientLight>) {
+fn setup_lighting(mut commands: Commands, mut ambient: ResMut<GlobalAmbientLight>) {
     // Sky-blue ambient fill — keeps shadowed areas from going pitch-black.
     ambient.color = Color::srgb(0.55, 0.65, 0.85);
     ambient.brightness = 400.0;
