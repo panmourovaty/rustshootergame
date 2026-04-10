@@ -177,7 +177,11 @@ impl Plugin for GamePlugin {
 /// The sun is positioned 100 m above the origin and angled ≈ 30° off vertical
 /// (toward negative X/Z) so shadows always have a clear direction rather than
 /// pointing straight down.
-fn setup_lighting(mut commands: Commands, mut ambient: ResMut<GlobalAmbientLight>) {
+fn setup_lighting(mut commands: Commands, ambient: Option<ResMut<GlobalAmbientLight>>) {
+    // GlobalAmbientLight only exists when bevy_pbr/LightPlugin is active (client).
+    // The server runs MinimalPlugins so this resource is absent — skip silently.
+    let Some(mut ambient) = ambient else { return };
+
     // Sky-blue ambient fill — keeps shadowed areas from going pitch-black.
     ambient.color = Color::srgb(0.55, 0.65, 0.85);
     ambient.brightness = 400.0;
