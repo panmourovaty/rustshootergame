@@ -203,7 +203,7 @@ fn start_connecting(
 }
 
 fn check_connected(
-    query: Query<Entity, (With<PendingClient>, Added<Connected>)>,
+    query: Query<Entity, (With<PendingClient>, With<Connected>)>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
     if query.iter().next().is_some() {
