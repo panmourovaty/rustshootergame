@@ -92,6 +92,7 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         // Spawn after the map and spawn points are ready, once gameplay begins.
         app.add_systems(OnEnter(GameState::Playing), spawn_local_player);
+        app.add_systems(OnExit(GameState::Playing), release_cursor);
         app.add_systems(
             Update,
             (
@@ -217,6 +218,16 @@ pub fn spawn_local_player(
                     ));
                 });
         });
+}
+
+/// Releases the cursor when leaving Playing so the connect/game-over screens
+/// are fully interactive (no grabbed mouse, no invisible cursor).
+fn release_cursor(mut cursor_query: Query<&mut CursorOptions>) {
+    let Ok(mut cursor) = cursor_query.single_mut() else {
+        return;
+    };
+    cursor.grab_mode = CursorGrabMode::None;
+    cursor.visible = true;
 }
 
 /// Left-click locks the cursor and enables FPS input; Escape releases it.
