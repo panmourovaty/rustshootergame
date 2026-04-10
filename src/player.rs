@@ -156,6 +156,9 @@ pub fn spawn_local_player(
         .spawn((
             Name::new("LocalPlayerLogical"),
             Transform::from_translation(spawn_pos),
+            // Required so that InheritedVisibility propagates correctly to the
+            // camera and gun mesh children (fixes Bevy warning B0004).
+            Visibility::default(),
             RigidBody::Dynamic,
             Collider::capsule(0.35, 1.0),
             LockedAxes::ROTATION_LOCKED,
