@@ -320,7 +320,7 @@ fn wt_hostname_link(
     query: Query<(Entity, &WebTransportHostname), (Without<Linking>, Without<Linked>)>,
     mut commands: Commands,
 ) {
-    let Ok((entity, wt)) = query.get(trigger.entity()) else {
+    let Ok((entity, wt)) = query.get(trigger.entity) else {
         return;
     };
     let url = wt.url.clone();
@@ -338,7 +338,7 @@ fn wt_hostname_link(
             AeronetLinkOf(entity),
             Name::from("WebTransportClient"),
         ));
-        WebTransportClient::connect(config, url).apply(&mut aeronet_entity);
+        WebTransportClient::connect(config, url).apply(aeronet_entity);
     });
 }
 
