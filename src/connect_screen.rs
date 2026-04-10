@@ -323,8 +323,8 @@ fn spawn_connect_screen(
             root.spawn((
                 Name::new("SettingsPanel"),
                 SettingsPanel,
-                Visibility::Hidden,
                 Node {
+                    display: Display::None,
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Stretch,
                     padding: UiRect::all(Val::Px(48.0)),
@@ -781,16 +781,16 @@ fn handle_cancel_button(
 
 fn handle_settings_button(
     interaction_query: Query<&Interaction, (Changed<Interaction>, With<SettingsButton>)>,
-    mut main_vis: Query<&mut Visibility, (With<ConnectMainPanel>, Without<SettingsPanel>)>,
-    mut settings_vis: Query<&mut Visibility, (With<SettingsPanel>, Without<ConnectMainPanel>)>,
+    mut main_node: Query<&mut Node, (With<ConnectMainPanel>, Without<SettingsPanel>)>,
+    mut settings_node: Query<&mut Node, (With<SettingsPanel>, Without<ConnectMainPanel>)>,
 ) {
     for interaction in interaction_query.iter() {
         if *interaction == Interaction::Pressed {
-            for mut vis in main_vis.iter_mut() {
-                *vis = Visibility::Hidden;
+            for mut node in main_node.iter_mut() {
+                node.display = Display::None;
             }
-            for mut vis in settings_vis.iter_mut() {
-                *vis = Visibility::Visible;
+            for mut node in settings_node.iter_mut() {
+                node.display = Display::Flex;
             }
         }
     }
@@ -798,16 +798,16 @@ fn handle_settings_button(
 
 fn handle_back_button(
     interaction_query: Query<&Interaction, (Changed<Interaction>, With<BackFromSettingsButton>)>,
-    mut main_vis: Query<&mut Visibility, (With<ConnectMainPanel>, Without<SettingsPanel>)>,
-    mut settings_vis: Query<&mut Visibility, (With<SettingsPanel>, Without<ConnectMainPanel>)>,
+    mut main_node: Query<&mut Node, (With<ConnectMainPanel>, Without<SettingsPanel>)>,
+    mut settings_node: Query<&mut Node, (With<SettingsPanel>, Without<ConnectMainPanel>)>,
 ) {
     for interaction in interaction_query.iter() {
         if *interaction == Interaction::Pressed {
-            for mut vis in main_vis.iter_mut() {
-                *vis = Visibility::Visible;
+            for mut node in main_node.iter_mut() {
+                node.display = Display::Flex;
             }
-            for mut vis in settings_vis.iter_mut() {
-                *vis = Visibility::Hidden;
+            for mut node in settings_node.iter_mut() {
+                node.display = Display::None;
             }
         }
     }
