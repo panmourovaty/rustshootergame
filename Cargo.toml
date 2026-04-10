@@ -85,6 +85,9 @@ tar = "0.4"
 wgpu = { version = "27", default-features = false }
 # Blocking HTTPS client used to download map archives on a background thread.
 ureq = { version = "3", features = ["rustls", "platform-verifier"] }
+# Minimal tokio runtime used to drive the async Identity::load_pemfiles call
+# when the server is started with --cert / --key.
+tokio = { version = "1", features = ["rt"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # Used to read window.__RSG_SERVER_ADDR__ set by index.html from server.txt.

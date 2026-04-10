@@ -10,13 +10,30 @@
 
 use bevy::prelude::*;
 use lightyear::prelude::server::*;
-use lightyear::prelude::{Connected, LocalAddr, NetworkTarget};
+use lightyear::prelude::{Connected, LocalAddr};
 use lightyear::prelude::{MessageReceiver, MessageSender};
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv6Addr, SocketAddr};
 use std::time::Duration;
 
 use aeronet_webtransport::wtransport::Identity;
 use lightyear::prelude::server::WebTransportServerIo;
+
+// ─── Certificate resource ─────────────────────────────────────────────────────
+
+/// Holds the TLS identity used for the WebTransport listener.
+///
+/// Inserted as a resource by `server_main` before Bevy starts so that
+/// `spawn_server_entities` can hand it straight to the transport layer.
+///
+/// `self_signed_digest` is `Some(hex_string)` when the identity was generated
+/// with `Identity::self_signed` and the digest must be baked into the WASM
+/// client.  It is `None` when a CA-signed certificate was loaded from disk,
+/// in which case browsers trust the cert automatically.
+#[derive(Resource)]
+pub struct ServerIdentity {
+    pub identity: Identity,
+    pub self_signed_digest: Option<String>,
+}
 
 use super::protocol::{
     GameChannel, HitMsg, JoinMsg, KillNotifyMsg, MapUrlMsg, PlayerJoinMsg, PlayerLeaveMsg,
@@ -119,7 +136,11 @@ fn color_for_id(client_id: u64) -> [f32; 3] {
 
 // ─── Systems ────────────────────────────────────────────────────────────────
 
-fn spawn_server_entities(mut commands: Commands, ports: Res<ServerPorts>) {
+fn spawn_server_entities(
+    mut commands: Commands,
+    ports: Res<ServerPorts>,
+    cert: Res<ServerIdentity>,
+) {
     let netcode_config = NetcodeConfig {
         protocol_id: PROTOCOL_ID,
         private_key: [0u8; 32],
@@ -127,7 +148,10 @@ fn spawn_server_entities(mut commands: Commands, ports: Res<ServerPorts>) {
     };
 
     // ── UDP listener (native clients) ────────────────────────────────────────
-    let udp_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), ports.udp);
+    // Bind to [::] (dual-stack) so both IPv4-mapped and native IPv6 clients
+    // can connect.  On Linux, IPV6_V6ONLY defaults to 0, meaning [::]:port
+    // also accepts IPv4 connections (shown as ::ffff:1.2.3.4).
+    let udp_addr = SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), ports.udp);
     let udp_entity = commands.spawn((
         Name::new("GameServerUdp"),
         ServerUdpIo::default(),
@@ -138,28 +162,31 @@ fn spawn_server_entities(mut commands: Commands, ports: Res<ServerPorts>) {
     info!("UDP listener on {}", udp_addr);
 
     // ── WebTransport listener (browser clients) ───────────────────────────────
-    let wt_addr = SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), ports.web);
+    let wt_addr = SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), ports.web);
 
-    let identity = Identity::self_signed(["localhost", "127.0.0.1", "::1"])
-        .expect("failed to generate self-signed TLS certificate");
-
-    let dotted = format!("{}", identity.certificate_chain().as_slice()[0].hash());
-    let cert_digest = dotted.replace(':', "");
-    info!(
-        "WebTransport listener on {} | cert digest: {}",
-        wt_addr, cert_digest
-    );
-    info!(
-        "→ To build the WASM client: RSG_CERT_DIGEST={} cargo build \
-         --target wasm32-unknown-unknown --no-default-features --features web \
-         --profile wasm-release --bin client",
-        cert_digest
-    );
+    match &cert.self_signed_digest {
+        Some(digest) => {
+            info!(
+                "WebTransport listener on {} | self-signed cert digest: {}",
+                wt_addr, digest
+            );
+            info!(
+                "→ To build the WASM client: RSG_CERT_DIGEST={} cargo build \
+                 --target wasm32-unknown-unknown --no-default-features --features web \
+                 --profile wasm-release --bin client",
+                digest
+            );
+            info!("→ Self-signed certificate expires in 14 days; rebuild WASM and restart the server before then.");
+        }
+        None => {
+            info!("WebTransport listener on {} | using CA-signed certificate", wt_addr);
+        }
+    }
 
     let wt_entity = commands.spawn((
         Name::new("GameServerWebTransport"),
         WebTransportServerIo {
-            certificate: identity,
+            certificate: cert.identity.clone_identity(),
         },
         LocalAddr(wt_addr),
         NetcodeServer::new(netcode_config),

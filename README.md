@@ -13,6 +13,7 @@ A Counter-Strike-inspired FPS built with Bevy + lightyear.
 5. [Environment Variable: RSG_SERVER_ADDR](#5-environment-variable-rsg_server_addr)
 6. [Browser / WASM Client](#6-browser--wasm-client)
 7. [Building from Source](#7-building-from-source)
+8. [WebTransport Certificate Setup](#8-webtransport-certificate-setup)
 
 ---
 
@@ -32,8 +33,8 @@ The server prints its IP and ports on startup:
 ===========================================
  RustShooter dedicated server is running
 ===========================================
- UDP  (native clients)  : 0.0.0.0:7777
- WebTransport (browser) : 0.0.0.0:7778
+ UDP  (native clients)  : [::]:7777
+ WebTransport (browser) : [::]:7778
 ===========================================
 ```
 
@@ -315,3 +316,147 @@ Step 4 — serve `dist/` over HTTPS. Any local dev server with TLS works (e.g. `
 |---------|-----------------|
 | `networking` (default) | UDP + WebTransport — native client + full server |
 | `web` | WebTransport only — WASM client (no UDP, no server code) |
+
+---
+
+## 8. WebTransport Certificate Setup
+
+WebTransport runs over QUIC/HTTP3 and **requires TLS**. The browser refuses to
+open a WebTransport session to a server whose certificate it does not trust.
+There are two ways to satisfy this requirement:
+
+| | Self-signed (default) | CA-signed (production) |
+|---|---|---|
+| Setup effort | Zero | Moderate |
+| WASM rebuild on restart | **Yes** (every 14 days) | No |
+| Works in Chrome / Edge | Yes | Yes |
+| Works in Firefox | No¹ | Yes |
+| Suitable for | Dev, LAN, short events | Public servers |
+
+¹ Firefox does not currently support WebTransport over self-signed certificates.
+
+---
+
+### 8.1 Self-signed certificate (default)
+
+The server generates a fresh ECDSA P-256 certificate at every startup. The
+W3C WebTransport specification caps the validity period at **14 days**, so the
+certificate is always short-lived.
+
+**How the browser trusts it**
+
+Instead of a CA chain, the browser validates the certificate by comparing its
+SHA-256 fingerprint against a list of trusted digests supplied at connection
+time by the client. The fingerprint must therefore be **baked into the WASM
+binary at compile time**.
+
+**Workflow**
+
+1. Start the server. It prints the fingerprint:
+
+   ```
+   WebTransport listener on [::]:7778 | self-signed cert digest: 4a9f3cABCD...
+   → To build the WASM client: RSG_CERT_DIGEST=4a9f3cABCD... cargo build ...
+   → Self-signed certificate expires in 14 days; rebuild WASM and restart the server before then.
+   ```
+
+2. Compile the WASM client with that digest (see [§7.3](#73-wasm-client)).
+
+3. Every time the server restarts a **new** certificate is generated. You must
+   recompile the WASM and redeploy it, then restart the server with the
+   new binary at roughly the same time. The 14-day window gives you time to
+   plan this; it is not instant.
+
+> **Tip — avoid surprise expiry:** schedule a cron job that rebuilds the WASM
+> and restarts the server together before the 14 days are up. A simple
+> weekly restart keeps the cert fresh with a comfortable margin.
+
+---
+
+### 8.2 CA-signed certificate (production)
+
+Using a certificate signed by a trusted CA (e.g. Let's Encrypt) removes the
+fingerprint constraint entirely. The browser trusts the cert automatically,
+no `RSG_CERT_DIGEST` is needed, and the WASM binary never needs to be
+recompiled because of a certificate rotation.
+
+**Requirements**
+
+- A domain name pointing to your server (e.g. `play.example.com`).
+- A valid TLS certificate for that domain from a recognised CA.
+- The certificate PEM file must cover the hostname clients will connect to
+  (the Common Name or a Subject Alternative Name entry must match).
+
+**Obtain a certificate with Certbot (Let's Encrypt)**
+
+```bash
+# Install certbot
+sudo apt-get install certbot       # Debian / Ubuntu
+# or: brew install certbot         # macOS
+
+# Issue a certificate (HTTP-01 challenge — requires port 80 to be open briefly)
+sudo certbot certonly --standalone -d play.example.com
+
+# Certbot writes the files to:
+#   /etc/letsencrypt/live/play.example.com/fullchain.pem   ← certificate chain
+#   /etc/letsencrypt/live/play.example.com/privkey.pem     ← private key
+```
+
+**Start the server with the certificate**
+
+```bash
+./server \
+  --cert /etc/letsencrypt/live/play.example.com/fullchain.pem \
+  --key  /etc/letsencrypt/live/play.example.com/privkey.pem
+```
+
+The server will log:
+
+```
+WebTransport listener on [::]:7778 | using CA-signed certificate
+```
+
+**Build the WASM client without a digest**
+
+Leave `RSG_CERT_DIGEST` unset (or set it to an empty string):
+
+```bash
+cargo build \
+  --target wasm32-unknown-unknown \
+  --no-default-features \
+  --features web \
+  --profile wasm-release \
+  --bin client
+```
+
+The browser fetches the certificate during the TLS handshake, verifies it
+against its built-in CA store, and connects without needing a hardcoded
+fingerprint.
+
+**Certificate renewal**
+
+Let's Encrypt certificates are valid for 90 days. Certbot installs a renewal
+timer automatically. After renewal, restart the server to pick up the new
+files:
+
+```bash
+sudo certbot renew
+sudo systemctl restart rustshooter-server   # or however you manage the process
+```
+
+No WASM rebuild is needed when the cert is renewed.
+
+---
+
+### 8.3 Firewall note for WebTransport
+
+WebTransport uses **QUIC (UDP)** on the WebTransport port (`--web-port`,
+default 7778). Make sure UDP is open, not just TCP:
+
+```bash
+# UFW
+sudo ufw allow 7778/udp
+
+# firewalld
+sudo firewall-cmd --add-port=7778/udp --permanent && sudo firewall-cmd --reload
+```

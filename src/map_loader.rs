@@ -39,7 +39,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use crate::game::GameState;
 use crate::map::{HardcodedMap, SpawnPoints};
+use crate::player::LocalPlayer;
 
 // ─── Public surface ──────────────────────────────────────────────────────────
 
@@ -63,9 +65,18 @@ impl Plugin for MapLoaderPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(MapDir(self.dir.clone()));
         app.add_message::<LoadMapFromUrl>();
+        // Show a blocking overlay as soon as the game enters Playing so the
+        // player never sees an empty world while waiting for the server map.
+        app.add_systems(OnEnter(GameState::Playing), show_waiting_overlay);
         app.add_systems(
             Update,
-            (handle_load_map_event, poll_download, poll_gltf_loaded),
+            (
+                handle_load_map_event,
+                poll_download,
+                poll_gltf_loaded,
+                tick_waiting_timeout,
+                attach_map_colliders,
+            ),
         );
     }
 }
@@ -93,31 +104,116 @@ struct ExtractedMap {
 #[derive(Resource)]
 struct PendingDownload(Arc<Mutex<Option<Result<ExtractedMap, String>>>>);
 
-/// Resource present while we wait for the GLTF handles to finish loading.
+/// Resource present while we wait for the GLTF scene handle to finish loading.
 #[derive(Resource)]
 struct LoadingMapHandles {
     scene: Handle<Gltf>,
-    collision: Option<Handle<Gltf>>,
     scene_loaded: bool,
-    collision_loaded: bool,
 }
+
+/// Stored after the map scene entity is spawned.  The `attach_map_colliders`
+/// system polls every frame until Bevy's SceneSpawner has instantiated the
+/// scene's child entities, then attaches `ColliderConstructorHierarchy`.
+///
+/// This two-step approach is necessary because avian3d processes
+/// `ColliderConstructorHierarchy` in PostUpdate of the same frame it is added,
+/// but Bevy's SceneSpawner only creates the GLTF child entities in the *next*
+/// frame's PreUpdate — so adding the hierarchy at spawn time means avian3d
+/// sees no children, marks the hierarchy done, and never creates any colliders.
+#[derive(Resource)]
+struct PendingMapCollider(Entity);
 
 /// Marker for entities spawned by the dynamic map so they can be cleaned up
 /// when a new map is loaded.
 #[derive(Component)]
 pub struct DynamicMap;
 
+/// Marker for the full-screen loading overlay shown while a map is being
+/// downloaded or its GLTF assets are being loaded.
+#[derive(Component)]
+struct MapLoadingOverlay;
+
+/// Marks the text node inside the loading overlay so its message can be updated.
+#[derive(Component)]
+struct MapLoadingLabel;
+
+/// Countdown started when the Playing state is entered.  If a `LoadMapFromUrl`
+/// event arrives before it expires the resource is removed; otherwise the
+/// overlay is dismissed (server has no custom map configured).
+#[derive(Resource)]
+struct WaitingForMapTimeout(Timer);
+
 // ─── Systems ─────────────────────────────────────────────────────────────────
+
+/// Spawns a fully-opaque black overlay the moment the Playing state is entered
+/// so the player never sees an empty world while waiting for the server to
+/// send a map URL.  A 2-second timeout is started; if no map URL arrives by
+/// then the overlay is removed (server has no `--map-url` configured).
+fn show_waiting_overlay(mut commands: Commands) {
+    commands
+        .spawn((
+            Name::new("MapLoadingOverlay"),
+            MapLoadingOverlay,
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 1.0)),
+        ))
+        .with_children(|c| {
+            c.spawn((
+                MapLoadingLabel,
+                Text::new("Waiting for server map..."),
+                TextFont { font_size: 28.0, ..default() },
+                TextColor(Color::WHITE),
+            ));
+        });
+    commands.insert_resource(WaitingForMapTimeout(Timer::from_seconds(
+        2.0,
+        TimerMode::Once,
+    )));
+}
+
+/// Ticks the waiting-for-map timer.  When it fires, the overlay is removed so
+/// the player can at least see the (empty) scene if the server has no map.
+fn tick_waiting_timeout(
+    time: Res<Time>,
+    timeout: Option<ResMut<WaitingForMapTimeout>>,
+    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+    mut commands: Commands,
+) {
+    let Some(mut timeout) = timeout else { return };
+    timeout.0.tick(time.delta());
+    if timeout.0.just_finished() {
+        for entity in overlay_query.iter() {
+            commands.entity(entity).despawn();
+        }
+        commands.remove_resource::<WaitingForMapTimeout>();
+    }
+}
 
 /// Reacts to `LoadMapFromUrl`, kicks off a background download, and installs
 /// `PendingDownload` so `poll_download` can check on it every frame.
 fn handle_load_map_event(
     mut events: MessageReader<LoadMapFromUrl>,
     mut commands: Commands,
+    mut label_query: Query<&mut Text, With<MapLoadingLabel>>,
 ) {
     for event in events.read() {
         let url = event.0.clone();
         info!("[MAP] Starting download: {}", url);
+
+        // Cancel the waiting timeout — a map URL arrived.
+        commands.remove_resource::<WaitingForMapTimeout>();
+
+        // Update the overlay that was spawned by show_waiting_overlay.
+        for mut text in label_query.iter_mut() {
+            **text = "Downloading map...".to_string();
+        }
 
         let slot: Arc<Mutex<Option<Result<ExtractedMap, String>>>> =
             Arc::new(Mutex::new(None));
@@ -155,6 +251,8 @@ fn poll_download(
     asset_server: Res<AssetServer>,
     mut spawn_points: ResMut<SpawnPoints>,
     mut commands: Commands,
+    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+    mut label_query: Query<&mut Text, With<MapLoadingLabel>>,
 ) {
     let Some(pending) = pending else { return };
 
@@ -169,9 +267,18 @@ fn poll_download(
     match result {
         Err(e) => {
             error!("[MAP] Download/extract failed: {}", e);
+            // Remove the overlay — don't leave a black screen on failure.
+            for entity in overlay_query.iter() {
+                commands.entity(entity).despawn();
+            }
         }
         Ok(extracted) => {
             info!("[MAP] Extracted {} files; inserting into map:// source", extracted.files.len());
+
+            // Advance the overlay message — download done, now waiting for GPU upload.
+            for mut text in label_query.iter_mut() {
+                **text = "Loading map assets...".to_string();
+            }
 
             // Populate spawn points from the optional text file.
             if let Some(sp_bytes) = extracted.files.get("spawn_points.txt") {
@@ -191,20 +298,11 @@ fn poll_download(
                 map_dir.0.insert_asset(Path::new(path_str), data.clone());
             }
 
-            // Begin loading the GLTF assets.
+            // Begin loading scene.glb — colliders are generated from its meshes.
             let scene_handle: Handle<Gltf> = asset_server.load("map://scene.glb");
-            let collision_handle = if extracted.files.contains_key("collision.glb") {
-                Some(asset_server.load::<Gltf>("map://collision.glb"))
-            } else {
-                warn!("[MAP] collision.glb not found in archive; no physics will be set up");
-                None
-            };
-
             commands.insert_resource(LoadingMapHandles {
                 scene: scene_handle,
-                collision: collision_handle,
                 scene_loaded: false,
-                collision_loaded: false,
             });
         }
     }
@@ -219,6 +317,7 @@ fn poll_gltf_loaded(
     mut commands: Commands,
     hardcoded_query: Query<Entity, With<HardcodedMap>>,
     dynamic_query: Query<Entity, With<DynamicMap>>,
+    mut label_query: Query<&mut Text, With<MapLoadingLabel>>,
 ) {
     let Some(mut loading) = loading else {
         // Drain events even when we're not waiting.
@@ -232,21 +331,14 @@ fn poll_gltf_loaded(
                 loading.scene_loaded = true;
                 info!("[MAP] scene.glb loaded");
             }
-            if let Some(col) = &loading.collision {
-                if *id == col.id() {
-                    loading.collision_loaded = true;
-                    info!("[MAP] collision.glb loaded");
-                }
-            }
         }
     }
 
-    let collision_ready = loading.collision.is_none() || loading.collision_loaded;
-    if !loading.scene_loaded || !collision_ready {
+    if !loading.scene_loaded {
         return;
     }
 
-    info!("[MAP] All GLTF files ready — swapping map");
+    info!("[MAP] GLTF ready — swapping map");
 
     // Despawn the previous dynamic map (if any).
     for entity in dynamic_query.iter() {
@@ -257,7 +349,9 @@ fn poll_gltf_loaded(
         commands.entity(entity).despawn();
     }
 
-    // Spawn visual scene.
+    // Spawn the visual scene.  ColliderConstructorHierarchy is NOT added here
+    // because Bevy's SceneSpawner won't instantiate the child entities until
+    // the next frame's PreUpdate — see `attach_map_colliders` below.
     if let Some(gltf) = gltf_assets.get(&loading.scene) {
         let scene_handle = gltf
             .default_scene
@@ -265,37 +359,108 @@ fn poll_gltf_loaded(
             .or_else(|| gltf.scenes.first().cloned())
             .expect("scene.glb has no scenes");
 
-        commands.spawn((
-            Name::new("DynamicMap_Visual"),
+        let map_entity = commands.spawn((
+            Name::new("DynamicMap"),
             DynamicMap,
             SceneRoot(scene_handle),
-        ));
-        info!("[MAP] Visual scene spawned");
+        )).id();
+        commands.insert_resource(PendingMapCollider(map_entity));
+        info!("[MAP] Map scene spawned; waiting for SceneSpawner before attaching colliders");
     }
 
-    // Spawn collision scene (invisible, physics only).
-    if let Some(col_handle) = &loading.collision {
-        if let Some(gltf) = gltf_assets.get(col_handle) {
-            let scene_handle = gltf
-                .default_scene
-                .clone()
-                .or_else(|| gltf.scenes.first().cloned())
-                .expect("collision.glb has no scenes");
-
-            commands.spawn((
-                Name::new("DynamicMap_Collision"),
-                DynamicMap,
-                SceneRoot(scene_handle),
-                // Auto-generate trimesh colliders for every mesh in the scene.
-                ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh),
-                // Render nothing — this scene is physics-only.
-                Visibility::Hidden,
-            ));
-            info!("[MAP] Collision scene spawned with ColliderConstructorHierarchy");
-        }
+    // Keep the overlay up — it will be removed by attach_map_colliders once
+    // the colliders exist and the player has been teleported to the floor.
+    for mut text in label_query.iter_mut() {
+        **text = "Setting up physics...".to_string();
     }
 
     commands.remove_resource::<LoadingMapHandles>();
+}
+
+/// Waits until Bevy's SceneSpawner has instantiated the map scene's child
+/// entities, then manually traverses every descendant, creates trimesh
+/// colliders directly from each mesh, and teleports the player to a spawn
+/// point before removing the loading overlay.
+///
+/// We avoid `ColliderConstructorHierarchy` here because avian3d marks the
+/// hierarchy "done" in the same PostUpdate pass it is added — if the GLTF
+/// scene root entity happens to have children at that point but the mesh
+/// assets aren't surfaced correctly, no colliders are created and the bug
+/// is silent.  Creating colliders explicitly lets us confirm success and
+/// retry the next frame if mesh data isn't available yet.
+fn attach_map_colliders(
+    pending: Option<Res<PendingMapCollider>>,
+    meshes: Res<Assets<Mesh>>,
+    children_of: Query<&Children>,
+    mesh_query: Query<&Mesh3d>,
+    spawn_points: Res<SpawnPoints>,
+    mut player_query: Query<(&mut Transform, &mut LinearVelocity), With<LocalPlayer>>,
+    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+    mut commands: Commands,
+) {
+    let Some(pending) = pending else { return };
+
+    // Collect every descendant entity that carries a Mesh3d handle.
+    let mut stack = vec![pending.0];
+    let mut mesh_entities: Vec<(Entity, Handle<Mesh>)> = Vec::new();
+    while let Some(entity) = stack.pop() {
+        if let Ok(mesh3d) = mesh_query.get(entity) {
+            mesh_entities.push((entity, mesh3d.0.clone()));
+        }
+        if let Ok(children) = children_of.get(entity) {
+            stack.extend(children.iter());
+        }
+    }
+
+    if mesh_entities.is_empty() {
+        return; // Scene not instantiated yet — retry next frame.
+    }
+
+    // Build trimesh colliders from mesh data.  If a mesh asset isn't ready
+    // yet (shouldn't happen after LoadedWithDependencies, but guard anyway),
+    // wait another frame rather than leaving the floor with no collider.
+    let mut created = 0usize;
+    for (entity, handle) in &mesh_entities {
+        let Some(mesh) = meshes.get(handle) else {
+            return; // Asset not ready — retry next frame.
+        };
+        match Collider::trimesh_from_mesh(mesh) {
+            Some(collider) => {
+                commands.entity(*entity).insert((collider, RigidBody::Static));
+                created += 1;
+            }
+            None => {
+                warn!("[MAP] trimesh_from_mesh returned None for {:?} — skipping", entity);
+            }
+        }
+    }
+
+    info!("[MAP] Created {} trimesh collider(s) from {} mesh(es)", created, mesh_entities.len());
+    commands.remove_resource::<PendingMapCollider>();
+
+    // Teleport the player onto the now-solid floor.
+    let spawn_pos = pick_spawn_point(&spawn_points);
+    for (mut transform, mut velocity) in player_query.iter_mut() {
+        transform.translation = spawn_pos;
+        *velocity = LinearVelocity::default();
+        info!("[MAP] Player teleported to spawn {:?}", spawn_pos);
+    }
+
+    // Floor is solid and player is positioned — safe to reveal the scene.
+    for entity in overlay_query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+fn pick_spawn_point(spawn_points: &SpawnPoints) -> Vec3 {
+    let points = &spawn_points.0;
+    if points.is_empty() {
+        return Vec3::new(0.0, 2.0, 0.0);
+    }
+    let mut buf = [0u8; 8];
+    getrandom::getrandom(&mut buf).unwrap_or(());
+    let idx = u64::from_le_bytes(buf) as usize % points.len();
+    points[idx]
 }
 
 // ─── Helper: parse "x y z" spawn-point line ──────────────────────────────────
@@ -331,6 +496,13 @@ fn extract_archive(compressed: &[u8]) -> Result<ExtractedMap, String> {
             .to_string_lossy()
             .trim_start_matches("./")
             .replace('\\', "/");
+
+        // Skip directory entries — their paths end with '/' (or have no
+        // file_name component), and Dir::insert_asset would panic on the
+        // file_name().unwrap() it performs internally.
+        if Path::new(&path_str).file_name().is_none() {
+            continue;
+        }
 
         let mut data = Vec::new();
         entry.read_to_end(&mut data).map_err(|e| e.to_string())?;
