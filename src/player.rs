@@ -1,9 +1,10 @@
 use bevy::camera::{Camera3dDepthLoadOp, visibility::RenderLayers};
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
-use bevy::window::{CursorGrabMode, CursorOptions};
+use bevy::render::view::Msaa;
+use bevy::window::{CursorGrabMode, CursorOptions, MonitorSelection, PrimaryWindow, WindowMode};
 use avian3d::prelude::*;
-use crate::game::{GameState, PlayerProfile};
+use crate::game::{GameSettings, GameState, MsaaSetting, PlayerProfile};
 use crate::map::SpawnPoints;
 use crate::weapon::Weapon;
 
@@ -93,6 +94,8 @@ impl Plugin for PlayerPlugin {
         // Spawn after the map and spawn points are ready, once gameplay begins.
         app.add_systems(OnEnter(GameState::Playing), spawn_local_player);
         app.add_systems(OnExit(GameState::Playing), release_cursor);
+        // Apply settings changes immediately regardless of game state.
+        app.add_systems(Update, (apply_msaa_setting, apply_fullscreen_setting));
         app.add_systems(
             Update,
             (
@@ -126,6 +129,7 @@ pub fn spawn_local_player(
     mut materials: ResMut<Assets<StandardMaterial>>,
     spawn_points: Res<SpawnPoints>,
     profile: Res<PlayerProfile>,
+    settings: Res<GameSettings>,
 ) {
     let spawn_pos = pick_spawn_point(&spawn_points);
 
@@ -176,6 +180,7 @@ pub fn spawn_local_player(
                         ..default()
                     }),
                     Transform::from_xyz(0.0, 0.7, 0.0),
+                    msaa_from_setting(settings.msaa),
                     PlayerCamera,
                 ))
                 .with_children(|cam| {
@@ -263,6 +268,7 @@ fn manage_cursor(
 /// camera transforms.  Yaw rotates the whole body; pitch only tilts the camera.
 fn fps_look(
     mut motion_events: MessageReader<MouseMotion>,
+    settings: Res<GameSettings>,
     mut player_query: Query<(&mut FpsController, &mut Transform), With<LocalPlayer>>,
     mut camera_query: Query<&mut Transform, (With<PlayerCamera>, Without<LocalPlayer>)>,
 ) {
@@ -284,8 +290,9 @@ fn fps_look(
         return;
     }
 
-    controller.yaw -= delta.x * controller.sensitivity;
-    controller.pitch = (controller.pitch - delta.y * controller.sensitivity)
+    let sensitivity = settings.mouse_sensitivity();
+    controller.yaw -= delta.x * sensitivity;
+    controller.pitch = (controller.pitch - delta.y * sensitivity)
         .clamp(
             -std::f32::consts::FRAC_PI_2 + 0.01,
             std::f32::consts::FRAC_PI_2 - 0.01,
@@ -366,6 +373,45 @@ fn fps_move(
     };
 
     vel.0 = Vec3::new(new_xz.x, new_y, new_xz.z);
+}
+
+fn msaa_from_setting(setting: MsaaSetting) -> Msaa {
+    match setting {
+        MsaaSetting::Off => Msaa::Off,
+        MsaaSetting::Sample4 => Msaa::Sample4,
+    }
+}
+
+/// Updates the MSAA component on the player camera whenever settings change.
+fn apply_msaa_setting(
+    settings: Res<GameSettings>,
+    mut camera_query: Query<&mut Msaa, With<PlayerCamera>>,
+) {
+    if !settings.is_changed() {
+        return;
+    }
+    let msaa = msaa_from_setting(settings.msaa);
+    for mut cam_msaa in camera_query.iter_mut() {
+        *cam_msaa = msaa;
+    }
+}
+
+/// Applies the fullscreen toggle to the primary window whenever settings change.
+fn apply_fullscreen_setting(
+    settings: Res<GameSettings>,
+    mut windows: Query<&mut Window, With<PrimaryWindow>>,
+) {
+    if !settings.is_changed() {
+        return;
+    }
+    let Ok(mut window) = windows.single_mut() else {
+        return;
+    };
+    window.mode = if settings.fullscreen {
+        WindowMode::BorderlessFullscreen(MonitorSelection::Current)
+    } else {
+        WindowMode::Windowed
+    };
 }
 
 /// Teleports the local player back to a random spawn when health reaches zero.
