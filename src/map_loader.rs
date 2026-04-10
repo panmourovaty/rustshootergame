@@ -193,21 +193,14 @@ fn show_waiting_overlay(mut commands: Commands) {
 fn tick_waiting_timeout(
     time: Res<Time>,
     timeout: Option<ResMut<WaitingForMapTimeout>>,
-    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
-    label_query: Query<Entity, With<MapLoadingLabel>>,
+    mut overlay_query: Query<(Entity, &mut Visibility), With<MapLoadingOverlay>>,
+    mut label_query: Query<(Entity, &mut Visibility), With<MapLoadingLabel>>,
     mut commands: Commands,
 ) {
     let Some(mut timeout) = timeout else { return };
     timeout.0.tick(time.delta());
     if timeout.0.just_finished() {
-        for entity in overlay_query.iter() {
-            commands.entity(entity).despawn();
-        }
-        // Also despawn the text label explicitly — if despawn() left the child
-        // as an orphan (Bevy relationship-hook edge case) this cleans it up.
-        for entity in label_query.iter() {
-            commands.entity(entity).despawn();
-        }
+        hide_and_despawn_overlay(&mut overlay_query, &mut label_query, &mut commands);
         commands.remove_resource::<WaitingForMapTimeout>();
     }
 }
@@ -268,8 +261,8 @@ fn poll_download(
     mut images: ResMut<Assets<Image>>,
     mut spawn_points: ResMut<SpawnPoints>,
     mut commands: Commands,
-    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
-    label_entity_query: Query<Entity, With<MapLoadingLabel>>,
+    mut overlay_query: Query<(Entity, &mut Visibility), With<MapLoadingOverlay>>,
+    mut label_vis_query: Query<(Entity, &mut Visibility), With<MapLoadingLabel>>,
     mut label_query: Query<&mut Text, With<MapLoadingLabel>>,
 ) {
     let Some(pending) = pending else { return };
@@ -286,14 +279,7 @@ fn poll_download(
         Err(e) => {
             error!("[MAP] Download/extract failed: {}", e);
             // Remove the overlay — don't leave a black screen on failure.
-            for entity in overlay_query.iter() {
-                commands.entity(entity).despawn();
-            }
-            // Explicitly despawn the label too — it may be an orphan if the
-            // 2-second timeout already removed the parent overlay entity.
-            for entity in label_entity_query.iter() {
-                commands.entity(entity).despawn();
-            }
+            hide_and_despawn_overlay(&mut overlay_query, &mut label_vis_query, &mut commands);
         }
         Ok(extracted) => {
             info!("[MAP] Extracted {} files; inserting into map:// source", extracted.files.len());
@@ -470,8 +456,8 @@ fn attach_map_colliders(
     mesh_query: Query<&Mesh3d>,
     spawn_points: Res<SpawnPoints>,
     mut player_query: Query<(&mut Transform, &mut LinearVelocity), With<LocalPlayer>>,
-    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
-    label_query: Query<Entity, With<MapLoadingLabel>>,
+    mut overlay_query: Query<(Entity, &mut Visibility), With<MapLoadingOverlay>>,
+    mut label_query: Query<(Entity, &mut Visibility), With<MapLoadingLabel>>,
     mut commands: Commands,
 ) {
     let Some(pending) = pending else { return };
@@ -523,20 +509,15 @@ fn attach_map_colliders(
     }
 
     // Floor is solid and player is positioned — safe to reveal the scene.
-    // Despawn both the overlay parent and the label child explicitly.  If the
-    // 2-second WaitingForMapTimeout fired early (due to a large time.delta()
-    // on the first frame caused by GPU mesh-upload stall from the hardcoded
-    // map meshes), despawn() on the parent may have left MapLoadingLabel as
-    // an orphan.  Removing it here guarantees no text lingers on screen.
+    // We hide entities immediately via Visibility::Hidden (synchronous component
+    // mutation) and also queue a deferred despawn for cleanup.  The immediate hide
+    // is crucial: if the deferred despawn fails (e.g. because another system already
+    // queued a despawn for the same entity in this frame), the entity is at least
+    // invisible from the very next render frame onward.
     let overlay_n = overlay_query.iter().count();
     let label_n = label_query.iter().count();
     info!("[MAP] Revealing scene ({} overlay, {} label entities dismissed)", overlay_n, label_n);
-    for entity in overlay_query.iter() {
-        commands.entity(entity).despawn();
-    }
-    for entity in label_query.iter() {
-        commands.entity(entity).despawn();
-    }
+    hide_and_despawn_overlay(&mut overlay_query, &mut label_query, &mut commands);
 }
 
 /// Attaches the `Skybox` component to the player's camera once the cubemap
@@ -556,6 +537,42 @@ fn apply_skybox(
     });
     commands.remove_resource::<PendingSkybox>();
     info!("[MAP] Skybox attached to camera");
+}
+
+/// Immediately hides the loading overlay and its text label by setting
+/// `Visibility::Hidden` directly (synchronous — takes effect this render
+/// frame), then queues a deferred `despawn()` for cleanup.
+///
+/// Hiding synchronously is important because `despawn()` is deferred through
+/// `Commands` — if another system in the same frame already queued a despawn
+/// for the same entity, our despawn command will hit a stale entity ID and
+/// log a warning.  In that race, the immediate `Visibility::Hidden` guarantees
+/// the overlay disappears even if the despawn is a no-op.
+fn hide_and_despawn_overlay(
+    overlay_query: &mut Query<(Entity, &mut Visibility), With<MapLoadingOverlay>>,
+    label_query: &mut Query<(Entity, &mut Visibility), With<MapLoadingLabel>>,
+    commands: &mut Commands,
+) {
+    let overlay_entities: Vec<Entity> = overlay_query
+        .iter_mut()
+        .map(|(entity, mut vis)| {
+            *vis = Visibility::Hidden;
+            entity
+        })
+        .collect();
+    let label_entities: Vec<Entity> = label_query
+        .iter_mut()
+        .map(|(entity, mut vis)| {
+            *vis = Visibility::Hidden;
+            entity
+        })
+        .collect();
+    for entity in overlay_entities {
+        commands.entity(entity).despawn();
+    }
+    for entity in label_entities {
+        commands.entity(entity).despawn();
+    }
 }
 
 fn pick_spawn_point(spawn_points: &SpawnPoints) -> Vec3 {
