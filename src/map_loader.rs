@@ -34,7 +34,7 @@ use bevy::asset::io::{
 };
 use bevy::asset::RenderAssetUsages;
 use bevy::core_pipeline::Skybox;
-use bevy::gltf::Gltf;
+use bevy::gltf::{convert_coordinates::GltfConvertCoordinates, Gltf, GltfLoaderSettings};
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
 use bevy::render::render_resource::{TextureAspect, TextureViewDescriptor, TextureViewDimension};
@@ -350,8 +350,19 @@ fn poll_download(
                 map_dir.0.insert_asset(Path::new(path_str), data.clone());
             }
 
-            // Begin loading scene.glb — colliders are generated from its meshes.
-            let scene_handle: Handle<Gltf> = asset_server.load("map://scene.glb");
+            // Begin loading scene.glb — with GLTF→Bevy coordinate conversion enabled.
+            // GLTF uses +Z-forward / −X-right; Bevy uses −Z-forward / +X-right.
+            // rotate_scene_entity applies a 180° Y rotation to the scene root so
+            // normals, lighting and geometry all align with Bevy's coordinate system.
+            let scene_handle: Handle<Gltf> = asset_server.load_with_settings(
+                "map://scene.glb",
+                |s: &mut GltfLoaderSettings| {
+                    s.convert_coordinates = Some(GltfConvertCoordinates {
+                        rotate_scene_entity: true,
+                        rotate_meshes: false,
+                    });
+                },
+            );
             commands.insert_resource(LoadingMapHandles {
                 scene: scene_handle,
                 scene_loaded: false,
