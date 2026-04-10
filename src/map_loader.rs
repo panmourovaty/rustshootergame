@@ -41,6 +41,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::game::GameState;
 use crate::map::{HardcodedMap, SpawnPoints};
+use crate::player::LocalPlayer;
 
 // ─── Public surface ──────────────────────────────────────────────────────────
 
@@ -316,7 +317,7 @@ fn poll_gltf_loaded(
     mut commands: Commands,
     hardcoded_query: Query<Entity, With<HardcodedMap>>,
     dynamic_query: Query<Entity, With<DynamicMap>>,
-    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+    mut label_query: Query<&mut Text, With<MapLoadingLabel>>,
 ) {
     let Some(mut loading) = loading else {
         // Drain events even when we're not waiting.
@@ -364,37 +365,72 @@ fn poll_gltf_loaded(
             SceneRoot(scene_handle),
         )).id();
         commands.insert_resource(PendingMapCollider(map_entity));
-        info!("[MAP] Map scene spawned; colliders will be attached once children exist");
+        info!("[MAP] Map scene spawned; waiting for SceneSpawner before attaching colliders");
     }
 
-    // Map is live — remove the loading overlay.
-    for entity in overlay_query.iter() {
-        commands.entity(entity).despawn();
+    // Keep the overlay up — it will be removed by attach_map_colliders once
+    // the colliders exist and the player has been teleported to the floor.
+    for mut text in label_query.iter_mut() {
+        **text = "Setting up physics...".to_string();
     }
 
     commands.remove_resource::<LoadingMapHandles>();
 }
 
 /// Waits until Bevy's SceneSpawner has instantiated the map scene's child
-/// entities, then attaches `ColliderConstructorHierarchy` so avian3d can
-/// find the meshes and build trimesh colliders.
+/// entities, then:
+///   1. Attaches `ColliderConstructorHierarchy` so avian3d builds colliders.
+///   2. Teleports the local player to a spawn point so they land on the floor
+///      instead of wherever they fell to while the map was loading.
+///   3. Removes the loading overlay.
 ///
-/// SceneSpawner runs in PreUpdate; this system runs in Update (the next
-/// schedule slot), so by the time we check, the children are present.
+/// Keeping the overlay up until this point ensures the player never sees
+/// themselves falling through an empty void during the loading phase.
 fn attach_map_colliders(
     pending: Option<Res<PendingMapCollider>>,
     children_query: Query<&Children>,
+    spawn_points: Res<SpawnPoints>,
+    mut player_query: Query<(&mut Transform, &mut LinearVelocity), With<LocalPlayer>>,
+    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
     mut commands: Commands,
 ) {
     let Some(pending) = pending else { return };
     // Children are present once SceneSpawner has done its work.
-    if children_query.get(pending.0).map(|c| !c.is_empty()).unwrap_or(false) {
-        commands
-            .entity(pending.0)
-            .insert(ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh));
-        commands.remove_resource::<PendingMapCollider>();
-        info!("[MAP] Trimesh colliders attached to map scene");
+    if !children_query.get(pending.0).map(|c| !c.is_empty()).unwrap_or(false) {
+        return;
     }
+
+    // Attach trimesh colliders to every mesh in the scene.
+    commands
+        .entity(pending.0)
+        .insert(ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh));
+    commands.remove_resource::<PendingMapCollider>();
+    info!("[MAP] Trimesh colliders attached to map scene");
+
+    // Teleport the player to a spawn point now that the floor exists.
+    // Also zero their velocity so they don't arrive mid-fall.
+    let spawn_pos = pick_spawn_point(&spawn_points);
+    for (mut transform, mut velocity) in player_query.iter_mut() {
+        transform.translation = spawn_pos;
+        *velocity = LinearVelocity::default();
+        info!("[MAP] Player teleported to spawn {:?}", spawn_pos);
+    }
+
+    // Floor is solid and player is positioned — safe to show the scene.
+    for entity in overlay_query.iter() {
+        commands.entity(entity).despawn();
+    }
+}
+
+fn pick_spawn_point(spawn_points: &SpawnPoints) -> Vec3 {
+    let points = &spawn_points.0;
+    if points.is_empty() {
+        return Vec3::new(0.0, 2.0, 0.0);
+    }
+    let mut buf = [0u8; 8];
+    getrandom::getrandom(&mut buf).unwrap_or(());
+    let idx = u64::from_le_bytes(buf) as usize % points.len();
+    points[idx]
 }
 
 // ─── Helper: parse "x y z" spawn-point line ──────────────────────────────────
