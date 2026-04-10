@@ -1,0 +1,4 @@
+# Only check the client binary by default — the server binary requires
+# --features server and shares source files that import client-only modules
+# (player, pvp, weapon, map_loader) which don't exist in the server tree.
+check.targets = ["client"]
