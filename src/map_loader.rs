@@ -378,37 +378,67 @@ fn poll_gltf_loaded(
 }
 
 /// Waits until Bevy's SceneSpawner has instantiated the map scene's child
-/// entities, then:
-///   1. Attaches `ColliderConstructorHierarchy` so avian3d builds colliders.
-///   2. Teleports the local player to a spawn point so they land on the floor
-///      instead of wherever they fell to while the map was loading.
-///   3. Removes the loading overlay.
+/// entities, then manually traverses every descendant, creates trimesh
+/// colliders directly from each mesh, and teleports the player to a spawn
+/// point before removing the loading overlay.
 ///
-/// Keeping the overlay up until this point ensures the player never sees
-/// themselves falling through an empty void during the loading phase.
+/// We avoid `ColliderConstructorHierarchy` here because avian3d marks the
+/// hierarchy "done" in the same PostUpdate pass it is added — if the GLTF
+/// scene root entity happens to have children at that point but the mesh
+/// assets aren't surfaced correctly, no colliders are created and the bug
+/// is silent.  Creating colliders explicitly lets us confirm success and
+/// retry the next frame if mesh data isn't available yet.
 fn attach_map_colliders(
     pending: Option<Res<PendingMapCollider>>,
-    children_query: Query<&Children>,
+    meshes: Res<Assets<Mesh>>,
+    children_of: Query<&Children>,
+    mesh_query: Query<&Mesh3d>,
     spawn_points: Res<SpawnPoints>,
     mut player_query: Query<(&mut Transform, &mut LinearVelocity), With<LocalPlayer>>,
     overlay_query: Query<Entity, With<MapLoadingOverlay>>,
     mut commands: Commands,
 ) {
     let Some(pending) = pending else { return };
-    // Children are present once SceneSpawner has done its work.
-    if !children_query.get(pending.0).map(|c| !c.is_empty()).unwrap_or(false) {
-        return;
+
+    // Collect every descendant entity that carries a Mesh3d handle.
+    let mut stack = vec![pending.0];
+    let mut mesh_entities: Vec<(Entity, Handle<Mesh>)> = Vec::new();
+    while let Some(entity) = stack.pop() {
+        if let Ok(mesh3d) = mesh_query.get(entity) {
+            mesh_entities.push((entity, mesh3d.0.clone()));
+        }
+        if let Ok(children) = children_of.get(entity) {
+            stack.extend(children.iter().copied());
+        }
     }
 
-    // Attach trimesh colliders to every mesh in the scene.
-    commands
-        .entity(pending.0)
-        .insert(ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh));
-    commands.remove_resource::<PendingMapCollider>();
-    info!("[MAP] Trimesh colliders attached to map scene");
+    if mesh_entities.is_empty() {
+        return; // Scene not instantiated yet — retry next frame.
+    }
 
-    // Teleport the player to a spawn point now that the floor exists.
-    // Also zero their velocity so they don't arrive mid-fall.
+    // Build trimesh colliders from mesh data.  If a mesh asset isn't ready
+    // yet (shouldn't happen after LoadedWithDependencies, but guard anyway),
+    // wait another frame rather than leaving the floor with no collider.
+    let mut created = 0usize;
+    for (entity, handle) in &mesh_entities {
+        let Some(mesh) = meshes.get(handle) else {
+            return; // Asset not ready — retry next frame.
+        };
+        match Collider::trimesh_from_mesh(mesh) {
+            Some(collider) => {
+                commands.entity(*entity).insert((collider, RigidBody::Static));
+                created += 1;
+            }
+            None => {
+                warn!("[MAP] trimesh_from_mesh returned None for {:?} — skipping", entity);
+            }
+        }
+    }
+
+    info!("[MAP] Created {} trimesh collider(s) from {} mesh(es)", created, mesh_entities.len());
+    commands.remove_resource::<PendingMapCollider>();
+
+    // Teleport the player onto the now-solid floor.
     let spawn_pos = pick_spawn_point(&spawn_points);
     for (mut transform, mut velocity) in player_query.iter_mut() {
         transform.translation = spawn_pos;
@@ -416,7 +446,7 @@ fn attach_map_colliders(
         info!("[MAP] Player teleported to spawn {:?}", spawn_pos);
     }
 
-    // Floor is solid and player is positioned — safe to show the scene.
+    // Floor is solid and player is positioned — safe to reveal the scene.
     for entity in overlay_query.iter() {
         commands.entity(entity).despawn();
     }
