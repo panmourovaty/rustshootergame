@@ -15,7 +15,7 @@ WORKDIR /app
 ARG GIT_HASH=unknown
 ENV GIT_HASH=$GIT_HASH
 
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
 COPY build.rs ./ 
 COPY src/ src/
 
