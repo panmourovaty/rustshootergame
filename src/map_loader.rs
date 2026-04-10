@@ -33,7 +33,7 @@ use bevy::asset::io::{
     AssetSourceBuilder,
 };
 use bevy::asset::RenderAssetUsages;
-use bevy::core_pipeline::skybox::Skybox;
+use bevy::core_pipeline::Skybox;
 use bevy::gltf::Gltf;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
