@@ -194,12 +194,18 @@ fn tick_waiting_timeout(
     time: Res<Time>,
     timeout: Option<ResMut<WaitingForMapTimeout>>,
     overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+    label_query: Query<Entity, With<MapLoadingLabel>>,
     mut commands: Commands,
 ) {
     let Some(mut timeout) = timeout else { return };
     timeout.0.tick(time.delta());
     if timeout.0.just_finished() {
         for entity in overlay_query.iter() {
+            commands.entity(entity).despawn();
+        }
+        // Also despawn the text label explicitly — if despawn() left the child
+        // as an orphan (Bevy relationship-hook edge case) this cleans it up.
+        for entity in label_query.iter() {
             commands.entity(entity).despawn();
         }
         commands.remove_resource::<WaitingForMapTimeout>();
@@ -263,6 +269,7 @@ fn poll_download(
     mut spawn_points: ResMut<SpawnPoints>,
     mut commands: Commands,
     overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+    label_entity_query: Query<Entity, With<MapLoadingLabel>>,
     mut label_query: Query<&mut Text, With<MapLoadingLabel>>,
 ) {
     let Some(pending) = pending else { return };
@@ -280,6 +287,11 @@ fn poll_download(
             error!("[MAP] Download/extract failed: {}", e);
             // Remove the overlay — don't leave a black screen on failure.
             for entity in overlay_query.iter() {
+                commands.entity(entity).despawn();
+            }
+            // Explicitly despawn the label too — it may be an orphan if the
+            // 2-second timeout already removed the parent overlay entity.
+            for entity in label_entity_query.iter() {
                 commands.entity(entity).despawn();
             }
         }
@@ -459,6 +471,7 @@ fn attach_map_colliders(
     spawn_points: Res<SpawnPoints>,
     mut player_query: Query<(&mut Transform, &mut LinearVelocity), With<LocalPlayer>>,
     overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+    label_query: Query<Entity, With<MapLoadingLabel>>,
     mut commands: Commands,
 ) {
     let Some(pending) = pending else { return };
@@ -510,7 +523,18 @@ fn attach_map_colliders(
     }
 
     // Floor is solid and player is positioned — safe to reveal the scene.
+    // Despawn both the overlay parent and the label child explicitly.  If the
+    // 2-second WaitingForMapTimeout fired early (due to a large time.delta()
+    // on the first frame caused by GPU mesh-upload stall from the hardcoded
+    // map meshes), despawn() on the parent may have left MapLoadingLabel as
+    // an orphan.  Removing it here guarantees no text lingers on screen.
+    let overlay_n = overlay_query.iter().count();
+    let label_n = label_query.iter().count();
+    info!("[MAP] Revealing scene ({} overlay, {} label entities dismissed)", overlay_n, label_n);
     for entity in overlay_query.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in label_query.iter() {
         commands.entity(entity).despawn();
     }
 }
