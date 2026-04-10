@@ -163,6 +163,26 @@ fn spawn_remote_player(
         // Spawn with center at Y = 0.85 so the capsule sits exactly on the floor.
         let spawn_pos = Vec3::new(0.0, 0.85, 0.0);
         let spawn_rot = Quat::IDENTITY;
+
+        // Weapon meshes — same appearance as the local player's gun.
+        let gun_body_mesh = meshes.add(Cuboid::new(0.04, 0.08, 0.35));
+        let gun_material  = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.12, 0.12, 0.12),
+            perceptual_roughness: 0.9,
+            metallic: 0.6,
+            ..default()
+        });
+        let barrel_mesh     = meshes.add(Cuboid::new(0.02, 0.02, 0.20));
+        let barrel_material = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.08, 0.08, 0.08),
+            metallic: 0.8,
+            perceptual_roughness: 0.6,
+            ..default()
+        });
+
+        // Gun positions are in local space relative to the capsule centre.
+        // X=0.45 keeps the mesh clear of the capsule radius (0.35 m).
+        // Y=0.40 ≈ shoulder/arm height.  Z=-0.35/-0.58 points the barrel forward.
         let entity = commands.spawn((
             Name::new(format!("RemotePlayer_{}", ev.client_id)),
             Mesh3d(meshes.add(Capsule3d {
@@ -186,7 +206,22 @@ fn spawn_remote_player(
                 to_rot: spawn_rot,
                 elapsed: INTERP_DURATION, // already "done" — no movement until first update
             },
-        )).id();
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Name::new("RemoteGunBody"),
+                Mesh3d(gun_body_mesh),
+                MeshMaterial3d(gun_material),
+                Transform::from_xyz(0.45, 0.40, -0.35),
+            ));
+            parent.spawn((
+                Name::new("RemoteGunBarrel"),
+                Mesh3d(barrel_mesh),
+                MeshMaterial3d(barrel_material),
+                Transform::from_xyz(0.45, 0.43, -0.58),
+            ));
+        })
+        .id();
 
         remote_players.by_id.insert(ev.client_id, RemotePlayerData {
             entity,
