@@ -74,7 +74,7 @@ avian3d = { version = "0.6", default-features = false, features = [
     "parallel",
 ] }
 lightyear = { version = "0.26", optional = true, default-features = false }
-aeronet_webtransport = { version = "0.20", optional = true }
+aeronet_webtransport = { version = "0.19", optional = true }
 lightyear_aeronet = { version = "0.26", optional = true, default-features = false }
 # getrandom needs the "js" feature to compile for wasm32-unknown-unknown,
 # so it can use the browser's crypto.getRandomValues() API.
