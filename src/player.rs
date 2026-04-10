@@ -1,3 +1,4 @@
+use bevy::camera::{Camera3dDepthLoadOp, visibility::RenderLayers};
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
@@ -7,6 +8,11 @@ use crate::map::SpawnPoints;
 use crate::weapon::Weapon;
 
 pub struct PlayerPlugin;
+
+/// Render layer used exclusively for the local player's weapon model.
+/// A dedicated camera renders this layer after clearing depth, so the
+/// weapon always draws on top of world geometry without z-fighting.
+pub const WEAPON_RENDER_LAYER: usize = 1;
 
 // ─── Components ─────────────────────────────────────────────────────────────
 
@@ -172,19 +178,42 @@ pub fn spawn_local_player(
                     PlayerCamera,
                 ))
                 .with_children(|cam| {
-                    // Gun body visible in bottom-right of view.
+                    // Secondary camera: same position/projection as the main camera
+                    // but renders only the weapon layer (layer 1) and clears the
+                    // depth buffer first.  This guarantees the weapon always draws
+                    // on top of world geometry regardless of how close walls are.
+                    cam.spawn((
+                        Name::new("WeaponCamera"),
+                        Camera3d {
+                            depth_load_op: Camera3dDepthLoadOp::Clear(0.0),
+                            ..default()
+                        },
+                        Camera {
+                            order: 1,
+                            ..default()
+                        },
+                        Projection::Perspective(PerspectiveProjection {
+                            fov: 90.0_f32.to_radians(),
+                            ..default()
+                        }),
+                        RenderLayers::layer(WEAPON_RENDER_LAYER),
+                        Transform::default(),
+                    ));
+                    // Gun body — weapon layer only.
                     cam.spawn((
                         Name::new("GunBody"),
                         Mesh3d(gun_body_mesh),
                         MeshMaterial3d(gun_material),
                         Transform::from_xyz(0.2, -0.15, -0.4),
+                        RenderLayers::layer(WEAPON_RENDER_LAYER),
                     ));
-                    // Barrel extension.
+                    // Barrel extension — weapon layer only.
                     cam.spawn((
                         Name::new("GunBarrel"),
                         Mesh3d(barrel_mesh),
                         MeshMaterial3d(barrel_material),
                         Transform::from_xyz(0.2, -0.12, -0.63),
+                        RenderLayers::layer(WEAPON_RENDER_LAYER),
                     ));
                 });
         });

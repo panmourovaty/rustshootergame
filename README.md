@@ -94,24 +94,49 @@ chmod +x server-linux-amd64    # first time only
 ./server-linux-amd64
 ```
 
-### Options
-
-```
-./server --help
-
-Options:
-  --port <PORT>         UDP port for native clients     [default: 7777]
-  --web-port <PORT>     WebTransport port for browser   [default: 7778]
-```
-
-### Examples
+All settings are controlled by a TOML configuration file. Copy `example_server_config.toml` from the repository to `server_config.toml` in the same directory as the binary and edit it:
 
 ```bash
-# Default ports (UDP 7777, WebTransport 7778)
+cp example_server_config.toml server_config.toml
+# edit server_config.toml as needed, then:
 ./server
+```
 
-# Custom ports
-./server --port 9000 --web-port 9001
+The server looks for `server_config.toml` in the current working directory. You can also point it at a different file by passing the path as the first argument:
+
+```bash
+./server /etc/rustshooter/config.toml
+```
+
+If neither a path argument nor `server_config.toml` is found, built-in defaults are used (UDP 7777, WebTransport 7778, kill limit 20, self-signed cert).
+
+### Configuration reference
+
+All fields are optional. Unset fields use the default shown.
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `port` | `7777` | UDP port for native (desktop) clients |
+| `web_port` | `7778` | WebTransport (HTTP/3) port for browser clients |
+| `kill_limit` | `20` | Kills required to end the round |
+| `map_url` | _(none)_ | HTTPS URL of a `.tar.zst` map archive |
+| `cert` | _(none)_ | Path to TLS certificate PEM (full chain) |
+| `key` | _(none)_ | Path to TLS private-key PEM |
+
+`cert` and `key` must be provided together or both left unset.
+
+### Example `server_config.toml`
+
+```toml
+port       = 7777
+web_port   = 7778
+kill_limit = 20
+
+# map_url = "https://example.com/maps/mymap.tar.zst"
+
+# CA-signed TLS certificate (see §8.2)
+# cert = "/etc/letsencrypt/live/play.example.com/fullchain.pem"
+# key  = "/etc/letsencrypt/live/play.example.com/privkey.pem"
 ```
 
 ### Firewall
@@ -404,10 +429,17 @@ sudo certbot certonly --standalone -d play.example.com
 
 **Start the server with the certificate**
 
+Add the following to your `server_config.toml`:
+
+```toml
+cert = "/etc/letsencrypt/live/play.example.com/fullchain.pem"
+key  = "/etc/letsencrypt/live/play.example.com/privkey.pem"
+```
+
+Then start the server normally:
+
 ```bash
-./server \
-  --cert /etc/letsencrypt/live/play.example.com/fullchain.pem \
-  --key  /etc/letsencrypt/live/play.example.com/privkey.pem
+./server
 ```
 
 The server will log:
@@ -450,7 +482,7 @@ No WASM rebuild is needed when the cert is renewed.
 
 ### 8.3 Firewall note for WebTransport
 
-WebTransport uses **QUIC (UDP)** on the WebTransport port (`--web-port`,
+WebTransport uses **QUIC (UDP)** on the WebTransport port (`web_port` in the config,
 default 7778). Make sure UDP is open, not just TCP:
 
 ```bash

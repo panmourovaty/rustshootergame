@@ -32,8 +32,12 @@ use bevy::asset::io::{
     memory::{Dir, MemoryAssetReader},
     AssetSourceBuilder,
 };
-use bevy::gltf::Gltf;
+use bevy::asset::RenderAssetUsages;
+use bevy::core_pipeline::Skybox;
+use bevy::gltf::{convert_coordinates::GltfConvertCoordinates, Gltf, GltfLoaderSettings};
+use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
+use bevy::render::render_resource::{TextureAspect, TextureViewDescriptor, TextureViewDimension};
 use avian3d::prelude::*;
 use std::collections::HashMap;
 use std::path::Path;
@@ -41,7 +45,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::game::GameState;
 use crate::map::{HardcodedMap, SpawnPoints};
-use crate::player::LocalPlayer;
+use crate::player::{LocalPlayer, PlayerCamera};
 
 // ─── Public surface ──────────────────────────────────────────────────────────
 
@@ -76,6 +80,7 @@ impl Plugin for MapLoaderPlugin {
                 poll_gltf_loaded,
                 tick_waiting_timeout,
                 attach_map_colliders,
+                apply_skybox,
             ),
         );
     }
@@ -110,6 +115,11 @@ struct LoadingMapHandles {
     scene: Handle<Gltf>,
     scene_loaded: bool,
 }
+
+/// Holds a fully-configured cubemap `Handle<Image>` extracted from the map
+/// archive's `skybox.webp` until it can be attached to the camera.
+#[derive(Resource)]
+struct PendingSkybox(Handle<Image>);
 
 /// Stored after the map scene entity is spawned.  The `attach_map_colliders`
 /// system polls every frame until Bevy's SceneSpawner has instantiated the
@@ -249,6 +259,7 @@ fn poll_download(
     pending: Option<Res<PendingDownload>>,
     map_dir: Res<MapDir>,
     asset_server: Res<AssetServer>,
+    mut images: ResMut<Assets<Image>>,
     mut spawn_points: ResMut<SpawnPoints>,
     mut commands: Commands,
     overlay_query: Query<Entity, With<MapLoadingOverlay>>,
@@ -293,13 +304,65 @@ fn poll_download(
                 }
             }
 
+            // Build cubemap from skybox.webp if present.
+            // The WEBP must be a vertical strip of 6 square faces (width W,
+            // height 6W) in order: +X, -X, +Y, -Y, +Z, -Z.
+            if let Some(skybox_bytes) = extracted.files.get("skybox.webp") {
+                match Image::from_buffer(
+                    skybox_bytes,
+                    ImageType::Extension("webp"),
+                    CompressedImageFormats::NONE,
+                    true,
+                    ImageSampler::Default,
+                    RenderAssetUsages::RENDER_WORLD,
+                ) {
+                    Ok(mut img) => {
+                        match img.reinterpret_stacked_2d_as_array(6) {
+                            Ok(()) => {
+                                img.texture_view_descriptor = Some(TextureViewDescriptor {
+                                    label: None,
+                                    format: None,
+                                    dimension: Some(TextureViewDimension::Cube),
+                                    usage: None,
+                                    aspect: TextureAspect::All,
+                                    base_mip_level: 0,
+                                    mip_level_count: None,
+                                    base_array_layer: 0,
+                                    array_layer_count: None,
+                                });
+                                let handle = images.add(img);
+                                commands.insert_resource(PendingSkybox(handle));
+                                info!("[MAP] skybox.webp decoded as cubemap — will apply to camera");
+                            }
+                            Err(e) => {
+                                warn!("[MAP] skybox.webp is not a valid 6-face vertical strip ({:?}); skipping", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("[MAP] Failed to decode skybox.webp: {:?}; skipping", e);
+                    }
+                }
+            }
+
             // Insert all extracted files into the in-memory asset source.
             for (path_str, data) in &extracted.files {
                 map_dir.0.insert_asset(Path::new(path_str), data.clone());
             }
 
-            // Begin loading scene.glb — colliders are generated from its meshes.
-            let scene_handle: Handle<Gltf> = asset_server.load("map://scene.glb");
+            // Begin loading scene.glb — with GLTF→Bevy coordinate conversion enabled.
+            // GLTF uses +Z-forward / −X-right; Bevy uses −Z-forward / +X-right.
+            // rotate_scene_entity applies a 180° Y rotation to the scene root so
+            // normals, lighting and geometry all align with Bevy's coordinate system.
+            let scene_handle: Handle<Gltf> = asset_server.load_with_settings(
+                "map://scene.glb",
+                |s: &mut GltfLoaderSettings| {
+                    s.convert_coordinates = Some(GltfConvertCoordinates {
+                        rotate_scene_entity: true,
+                        rotate_meshes: false,
+                    });
+                },
+            );
             commands.insert_resource(LoadingMapHandles {
                 scene: scene_handle,
                 scene_loaded: false,
@@ -450,6 +513,25 @@ fn attach_map_colliders(
     for entity in overlay_query.iter() {
         commands.entity(entity).despawn();
     }
+}
+
+/// Attaches the `Skybox` component to the player's camera once the cubemap
+/// image has been prepared by `poll_download`.
+fn apply_skybox(
+    pending: Option<Res<PendingSkybox>>,
+    camera_query: Query<Entity, With<PlayerCamera>>,
+    mut commands: Commands,
+) {
+    let Some(pending) = pending else { return };
+    let Ok(camera_entity) = camera_query.single() else { return };
+
+    commands.entity(camera_entity).insert(Skybox {
+        image: pending.0.clone(),
+        brightness: 1000.0,
+        rotation: Quat::IDENTITY,
+    });
+    commands.remove_resource::<PendingSkybox>();
+    info!("[MAP] Skybox attached to camera");
 }
 
 fn pick_spawn_point(spawn_points: &SpawnPoints) -> Vec3 {

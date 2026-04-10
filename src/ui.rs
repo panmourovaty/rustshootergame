@@ -3,6 +3,12 @@ use crate::game::{GameState, KillEvent, PlayerNames, Scores};
 use crate::player::{Health, LocalPlayer};
 use crate::weapon::Weapon;
 
+// ─── Game-over timer resource ────────────────────────────────────────────────
+
+/// Counts down after game over; on expiry transitions back to ConnectScreen.
+#[derive(Resource)]
+struct GameOverTimer(Timer);
+
 pub struct UiPlugin;
 
 // ─── Marker components ───────────────────────────────────────────────────────
@@ -23,6 +29,9 @@ struct KillFeedEntry {
 
 #[derive(Component)]
 struct GameOverScreen;
+
+#[derive(Component)]
+struct GameOverCountdownText;
 
 #[derive(Component)]
 struct ReloadingText;
@@ -52,6 +61,10 @@ impl Plugin for UiPlugin {
         );
         app.add_systems(OnEnter(GameState::GameOver), show_game_over_screen);
         app.add_systems(OnExit(GameState::GameOver), hide_game_over_screen);
+        app.add_systems(
+            Update,
+            tick_game_over.run_if(in_state(GameState::GameOver)),
+        );
     }
 }
 
@@ -352,6 +365,8 @@ fn despawn_hud(mut commands: Commands, query: Query<Entity, With<HudRoot>>) {
 
 // ─── Game-over overlay ───────────────────────────────────────────────────────
 
+const GAME_OVER_DELAY: f32 = 10.0;
+
 fn show_game_over_screen(
     mut commands: Commands,
     scores: Res<Scores>,
@@ -369,6 +384,11 @@ fn show_game_over_screen(
         .get(&winner_id)
         .cloned()
         .unwrap_or_else(|| format!("{}", winner_id & 0xFFFF));
+
+    commands.insert_resource(GameOverTimer(Timer::from_seconds(
+        GAME_OVER_DELAY,
+        TimerMode::Once,
+    )));
 
     commands
         .spawn((
@@ -389,32 +409,39 @@ fn show_game_over_screen(
         .with_children(|parent| {
             parent.spawn((
                 Text::new("GAME OVER"),
-                TextFont {
-                    font_size: 64.0,
-                    ..default()
-                },
+                TextFont { font_size: 64.0, ..default() },
                 TextColor(Color::srgb(1.0, 0.2, 0.2)),
             ));
             parent.spawn((
-                Text::new(format!(
-                    "{} wins with {} kills!",
-                    winner_name, winner_kills
-                )),
-                TextFont {
-                    font_size: 32.0,
-                    ..default()
-                },
+                Text::new(format!("{} wins with {} kills!", winner_name, winner_kills)),
+                TextFont { font_size: 32.0, ..default() },
                 TextColor(Color::WHITE),
             ));
             parent.spawn((
-                Text::new("Press Escape to exit"),
-                TextFont {
-                    font_size: 20.0,
-                    ..default()
-                },
+                Text::new(format!("Returning to lobby in {}...", GAME_OVER_DELAY as u32)),
+                TextFont { font_size: 20.0, ..default() },
                 TextColor(Color::srgb(0.7, 0.7, 0.7)),
+                GameOverCountdownText,
             ));
         });
+}
+
+fn tick_game_over(
+    time: Res<Time>,
+    mut timer: ResMut<GameOverTimer>,
+    mut text_query: Query<&mut Text, With<GameOverCountdownText>>,
+    mut next_state: ResMut<NextState<GameState>>,
+    mut commands: Commands,
+) {
+    timer.0.tick(time.delta());
+    let remaining = (timer.0.remaining_secs().ceil() as u32).max(0);
+    for mut text in text_query.iter_mut() {
+        **text = format!("Returning to lobby in {}...", remaining);
+    }
+    if timer.0.just_finished() {
+        commands.remove_resource::<GameOverTimer>();
+        next_state.set(GameState::ConnectScreen);
+    }
 }
 
 fn hide_game_over_screen(

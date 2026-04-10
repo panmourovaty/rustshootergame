@@ -96,7 +96,7 @@ pub struct GameConfig {
 
 impl Default for GameConfig {
     fn default() -> Self {
-        Self { kill_limit: 10 }
+        Self { kill_limit: 20 }
     }
 }
 
@@ -149,6 +149,8 @@ impl Plugin for GamePlugin {
         app.init_resource::<PlayerNames>();
         app.add_message::<KillEvent>();
 
+        app.add_systems(Startup, setup_lighting);
+
         // Immediately transition out of Loading on entry.
         app.add_systems(
             OnEnter(GameState::Loading),
@@ -169,6 +171,34 @@ impl Plugin for GamePlugin {
 }
 
 // ─── Systems ────────────────────────────────────────────────────────────────
+
+/// Spawns a warm directional sun and a dim sky-blue ambient light.
+///
+/// The sun is positioned 100 m above the origin and angled ≈ 30° off vertical
+/// (toward negative X/Z) so shadows always have a clear direction rather than
+/// pointing straight down.
+fn setup_lighting(mut commands: Commands, ambient: Option<ResMut<GlobalAmbientLight>>) {
+    // GlobalAmbientLight only exists when bevy_pbr/LightPlugin is active (client).
+    // The server runs MinimalPlugins so this resource is absent — skip silently.
+    let Some(mut ambient) = ambient else { return };
+
+    // Sky-blue ambient fill — keeps shadowed areas from going pitch-black.
+    ambient.color = Color::srgb(0.55, 0.65, 0.85);
+    ambient.brightness = 400.0;
+
+    // Warm sun: from (0, 100, 0) aimed at (-30, 0, -30) ≈ 30° from zenith.
+    commands.spawn((
+        Name::new("Sun"),
+        DirectionalLight {
+            color: Color::srgb(1.0, 0.95, 0.82),
+            illuminance: 25_000.0,
+            shadows_enabled: true,
+            ..default()
+        },
+        Transform::from_xyz(0.0, 100.0, 0.0)
+            .looking_at(Vec3::new(-30.0, 0.0, -30.0), Vec3::Z),
+    ));
+}
 
 pub fn record_kills(mut scores: ResMut<Scores>, mut kill_events: MessageReader<KillEvent>) {
     for ev in kill_events.read() {

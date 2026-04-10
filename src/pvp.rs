@@ -15,6 +15,29 @@ pub struct RemotePlayer {
     pub client_id: u64,
 }
 
+/// Interpolation state for a remote player's visual position/rotation.
+///
+/// Network updates arrive at ~20 Hz (every 50 ms).  Without smoothing the
+/// capsule visibly stutters at any framerate above 20 fps.  Each time a new
+/// `RemotePlayerMoved` packet arrives we record the current visual position as
+/// `from` and the received position as `to`, then advance `elapsed` every
+/// frame.  The visual transform is set to `lerp(from, to, t)` where
+/// `t = elapsed / INTERP_DURATION`, clamped to 1.0 once we've caught up.
+#[derive(Component)]
+pub struct RemotePlayerInterp {
+    pub from_pos: Vec3,
+    pub to_pos: Vec3,
+    pub from_rot: Quat,
+    pub to_rot: Quat,
+    /// Seconds elapsed since the last network update was received.
+    pub elapsed: f32,
+}
+
+/// How long (in seconds) to spend interpolating between two position snapshots.
+/// Two update intervals (2 × 50 ms) gives a small jitter buffer so movement
+/// remains smooth even when packets arrive slightly out of time.
+const INTERP_DURATION: f32 = 0.1;
+
 // ─── Resources ──────────────────────────────────────────────────────────────
 
 #[derive(Clone)]
@@ -93,7 +116,9 @@ impl Plugin for PvpPlugin {
             (
                 spawn_remote_player,
                 despawn_remote_player,
-                update_remote_player_pos,
+                // Receive network snapshots first, then apply smooth interpolation.
+                receive_remote_player_pos,
+                interpolate_remote_players,
                 apply_local_damage,
                 handle_remote_kill,
                 toggle_scoreboard,
@@ -136,6 +161,28 @@ fn spawn_remote_player(
 
         // Capsule3d: radius 0.35 m, half_length 0.5 m → total height 1.7 m.
         // Spawn with center at Y = 0.85 so the capsule sits exactly on the floor.
+        let spawn_pos = Vec3::new(0.0, 0.85, 0.0);
+        let spawn_rot = Quat::IDENTITY;
+
+        // Weapon meshes — same appearance as the local player's gun.
+        let gun_body_mesh = meshes.add(Cuboid::new(0.04, 0.08, 0.35));
+        let gun_material  = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.12, 0.12, 0.12),
+            perceptual_roughness: 0.9,
+            metallic: 0.6,
+            ..default()
+        });
+        let barrel_mesh     = meshes.add(Cuboid::new(0.02, 0.02, 0.20));
+        let barrel_material = materials.add(StandardMaterial {
+            base_color: Color::srgb(0.08, 0.08, 0.08),
+            metallic: 0.8,
+            perceptual_roughness: 0.6,
+            ..default()
+        });
+
+        // Gun positions are in local space relative to the capsule centre.
+        // X=0.45 keeps the mesh clear of the capsule radius (0.35 m).
+        // Y=0.40 ≈ shoulder/arm height.  Z=-0.35/-0.58 points the barrel forward.
         let entity = commands.spawn((
             Name::new(format!("RemotePlayer_{}", ev.client_id)),
             Mesh3d(meshes.add(Capsule3d {
@@ -148,11 +195,33 @@ fn spawn_remote_player(
                 metallic: 0.1,
                 ..default()
             })),
-            Transform::from_xyz(0.0, 0.85, 0.0),
+            Transform::from_translation(spawn_pos).with_rotation(spawn_rot),
             RigidBody::Kinematic,
             Collider::capsule(0.35, 1.0),
             RemotePlayer { client_id: ev.client_id },
-        )).id();
+            RemotePlayerInterp {
+                from_pos: spawn_pos,
+                to_pos: spawn_pos,
+                from_rot: spawn_rot,
+                to_rot: spawn_rot,
+                elapsed: INTERP_DURATION, // already "done" — no movement until first update
+            },
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Name::new("RemoteGunBody"),
+                Mesh3d(gun_body_mesh),
+                MeshMaterial3d(gun_material),
+                Transform::from_xyz(0.45, 0.40, -0.35),
+            ));
+            parent.spawn((
+                Name::new("RemoteGunBarrel"),
+                Mesh3d(barrel_mesh),
+                MeshMaterial3d(barrel_material),
+                Transform::from_xyz(0.45, 0.43, -0.58),
+            ));
+        })
+        .id();
 
         remote_players.by_id.insert(ev.client_id, RemotePlayerData {
             entity,
@@ -182,22 +251,45 @@ fn despawn_remote_player(
     }
 }
 
-fn update_remote_player_pos(
+/// Reads incoming network snapshots and sets the interpolation target.
+/// Does NOT write to `Transform` directly — `interpolate_remote_players` does that.
+fn receive_remote_player_pos(
     mut events: MessageReader<RemotePlayerMoved>,
     remote_players: Res<RemotePlayers>,
-    mut transform_query: Query<&mut Transform>,
+    mut interp_query: Query<(&Transform, &mut RemotePlayerInterp)>,
 ) {
     for ev in events.read() {
-        if let Some(data) = remote_players.by_id.get(&ev.client_id) {
-            if let Ok(mut tf) = transform_query.get_mut(data.entity) {
-                tf.translation = ev.pos;
-                tf.rotation = Quat::from_rotation_y(ev.yaw);
-            } else {
-                warn!("[PVP] update_remote_player_pos: entity {:?} for id={} missing Transform", data.entity, ev.client_id);
-            }
-        } else {
-            warn!("[PVP] update_remote_player_pos: no tracked entity for id={} — join not yet processed?", ev.client_id);
-        }
+        let Some(data) = remote_players.by_id.get(&ev.client_id) else {
+            warn!("[PVP] receive_remote_player_pos: no tracked entity for id={}", ev.client_id);
+            continue;
+        };
+        let Ok((tf, mut interp)) = interp_query.get_mut(data.entity) else {
+            warn!("[PVP] receive_remote_player_pos: entity {:?} for id={} missing components", data.entity, ev.client_id);
+            continue;
+        };
+        // Start a new interpolation segment from the current visual position
+        // so there is never a visible snap, even if the previous segment was
+        // still in progress when this update arrived.
+        interp.from_pos = tf.translation;
+        interp.from_rot = tf.rotation;
+        interp.to_pos   = ev.pos;
+        interp.to_rot   = Quat::from_rotation_y(ev.yaw);
+        interp.elapsed  = 0.0;
+    }
+}
+
+/// Advances the interpolation each frame so remote players move smoothly at
+/// the full render framerate rather than jumping every network tick.
+fn interpolate_remote_players(
+    time: Res<Time>,
+    mut query: Query<(&mut Transform, &mut RemotePlayerInterp)>,
+) {
+    let dt = time.delta_secs();
+    for (mut tf, mut interp) in query.iter_mut() {
+        interp.elapsed += dt;
+        let t = (interp.elapsed / INTERP_DURATION).min(1.0);
+        tf.translation = interp.from_pos.lerp(interp.to_pos, t);
+        tf.rotation    = interp.from_rot.slerp(interp.to_rot, t);
     }
 }
 
