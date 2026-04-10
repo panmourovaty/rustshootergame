@@ -74,6 +74,7 @@ impl Plugin for MapLoaderPlugin {
                 poll_download,
                 poll_gltf_loaded,
                 tick_waiting_timeout,
+                attach_map_colliders,
             ),
         );
     }
@@ -108,6 +109,18 @@ struct LoadingMapHandles {
     scene: Handle<Gltf>,
     scene_loaded: bool,
 }
+
+/// Stored after the map scene entity is spawned.  The `attach_map_colliders`
+/// system polls every frame until Bevy's SceneSpawner has instantiated the
+/// scene's child entities, then attaches `ColliderConstructorHierarchy`.
+///
+/// This two-step approach is necessary because avian3d processes
+/// `ColliderConstructorHierarchy` in PostUpdate of the same frame it is added,
+/// but Bevy's SceneSpawner only creates the GLTF child entities in the *next*
+/// frame's PreUpdate — so adding the hierarchy at spawn time means avian3d
+/// sees no children, marks the hierarchy done, and never creates any colliders.
+#[derive(Resource)]
+struct PendingMapCollider(Entity);
 
 /// Marker for entities spawned by the dynamic map so they can be cleaned up
 /// when a new map is loaded.
@@ -335,8 +348,9 @@ fn poll_gltf_loaded(
         commands.entity(entity).despawn();
     }
 
-    // Spawn the visual scene and attach ColliderConstructorHierarchy so
-    // Avian3D automatically generates trimesh colliders for every mesh in it.
+    // Spawn the visual scene.  ColliderConstructorHierarchy is NOT added here
+    // because Bevy's SceneSpawner won't instantiate the child entities until
+    // the next frame's PreUpdate — see `attach_map_colliders` below.
     if let Some(gltf) = gltf_assets.get(&loading.scene) {
         let scene_handle = gltf
             .default_scene
@@ -344,13 +358,13 @@ fn poll_gltf_loaded(
             .or_else(|| gltf.scenes.first().cloned())
             .expect("scene.glb has no scenes");
 
-        commands.spawn((
+        let map_entity = commands.spawn((
             Name::new("DynamicMap"),
             DynamicMap,
             SceneRoot(scene_handle),
-            ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh),
-        ));
-        info!("[MAP] Map scene spawned with trimesh colliders");
+        )).id();
+        commands.insert_resource(PendingMapCollider(map_entity));
+        info!("[MAP] Map scene spawned; colliders will be attached once children exist");
     }
 
     // Map is live — remove the loading overlay.
@@ -359,6 +373,28 @@ fn poll_gltf_loaded(
     }
 
     commands.remove_resource::<LoadingMapHandles>();
+}
+
+/// Waits until Bevy's SceneSpawner has instantiated the map scene's child
+/// entities, then attaches `ColliderConstructorHierarchy` so avian3d can
+/// find the meshes and build trimesh colliders.
+///
+/// SceneSpawner runs in PreUpdate; this system runs in Update (the next
+/// schedule slot), so by the time we check, the children are present.
+fn attach_map_colliders(
+    pending: Option<Res<PendingMapCollider>>,
+    children_query: Query<&Children>,
+    mut commands: Commands,
+) {
+    let Some(pending) = pending else { return };
+    // Children are present once SceneSpawner has done its work.
+    if children_query.get(pending.0).map(|c| !c.is_empty()).unwrap_or(false) {
+        commands
+            .entity(pending.0)
+            .insert(ColliderConstructorHierarchy::new(ColliderConstructor::TrimeshFromMesh));
+        commands.remove_resource::<PendingMapCollider>();
+        info!("[MAP] Trimesh colliders attached to map scene");
+    }
 }
 
 // ─── Helper: parse "x y z" spawn-point line ──────────────────────────────────
