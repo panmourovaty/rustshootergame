@@ -96,7 +96,7 @@ pub struct GameConfig {
 
 impl Default for GameConfig {
     fn default() -> Self {
-        Self { kill_limit: 10 }
+        Self { kill_limit: 20 }
     }
 }
 
