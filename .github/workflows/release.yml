@@ -342,31 +342,44 @@ jobs:
         run: find dist/ -type f | sort
 
       - name: Create or update rolling "latest" release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: latest
-          name: "Latest Build"
-          body: |
-            Automated build from the `main` branch — commit ${{ github.sha }}.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Write release notes to a file to avoid shell-quoting issues.
+          cat > /tmp/release-notes.md << 'NOTES'
+          Automated build from the `main` branch — commit COMMIT_SHA.
 
-            ### Client
+          ### Client
 
-            | Binary | Platform | Notes |
-            |--------|----------|-------|
-            | `client-windows-x86_64.exe` | Windows x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) — Windows 11 minimum CPUs all support this |
-            | `client-linux-amd64` | Linux x86-64 | x86-64-v2 (SSE4.2 + POPCNT) |
-            | `client-linux-arm64` | Linux ARM64 | NEON baseline — runs on any AArch64 |
-            | `client-macos-arm64` | macOS Apple Silicon | NEON |
-            | `client-web.zip` | Browser (WASM) | Also live on Cloudflare Pages |
+          | Binary | Platform | Notes |
+          |--------|----------|-------|
+          | `client-windows-x86_64.exe` | Windows x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) — Windows 11 minimum CPUs all support this |
+          | `client-linux-amd64` | Linux x86-64 | x86-64-v2 (SSE4.2 + POPCNT) |
+          | `client-linux-arm64` | Linux ARM64 | NEON baseline — runs on any AArch64 |
+          | `client-macos-arm64` | macOS Apple Silicon | NEON |
+          | `client-web.zip` | Browser (WASM) | Also live on Cloudflare Pages |
 
-            ### Server
+          ### Server
 
-            | Binary | Platform | Notes |
-            |--------|----------|-------|
-            | `server-linux-amd64` | Linux x86-64 | x86-64-v2 (SSE4.2 + POPCNT) |
-            | `server-linux-arm64` | Linux ARM64 | NEON baseline — runs on any AArch64 |
-          prerelease: true
-          allowUpdates: true
-          removeArtifacts: true
-          artifacts: "dist/client-*/*,dist/server-*/*,dist/client-web.zip"
-          token: ${{ secrets.GITHUB_TOKEN }}
+          | Binary | Platform | Notes |
+          |--------|----------|-------|
+          | `server-linux-amd64` | Linux x86-64 | x86-64-v2 (SSE4.2 + POPCNT) |
+          | `server-linux-arm64` | Linux ARM64 | NEON baseline — runs on any AArch64 |
+          NOTES
+          sed -i "s/COMMIT_SHA/${{ github.sha }}/" /tmp/release-notes.md
+
+          # Delete the existing rolling release + tag so we can recreate cleanly.
+          # Ignore the error if it doesn't exist yet on the first run.
+          gh release delete latest --cleanup-tag --yes 2>/dev/null || true
+
+          # Collect native binary files (one level deep inside per-artifact dirs)
+          # and add the WASM zip.
+          mapfile -t ARTIFACT_FILES < <(find dist -mindepth 2 -maxdepth 2 -type f)
+          ARTIFACT_FILES+=("dist/client-web.zip")
+
+          gh release create latest \
+            --title "Latest Build" \
+            --prerelease \
+            --target "${{ github.sha }}" \
+            --notes-file /tmp/release-notes.md \
+            "${ARTIFACT_FILES[@]}"

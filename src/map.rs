@@ -36,6 +36,43 @@ impl Plugin for MapPlugin {
 /// Spawns a simple placeholder arena: a 50×50 m floor and four perimeter walls.
 /// All entities are tagged with `HardcodedMap` so the dynamic map loader can
 /// despawn them when a server-provided map is downloaded.
+///
+/// The server build omits visual mesh/material components — `PbrPlugin` is
+/// never added under `MinimalPlugins`, so `Assets<StandardMaterial>` does not
+/// exist.  The server only needs the physics colliders.
+#[cfg(feature = "server")]
+fn spawn_hardcoded_map(mut commands: Commands) {
+    // Floor: 50×50 m slab, top surface at y = 0.
+    commands.spawn((
+        Name::new("HardcodedFloor"),
+        HardcodedMap,
+        Transform::from_xyz(0.0, -0.25, 0.0),
+        RigidBody::Static,
+        Collider::cuboid(25.0, 0.25, 25.0),
+    ));
+
+    // Four perimeter walls (50 m long, 5 m tall, 0.5 m thick).
+    for (pos, hx, hy, hz) in [
+        // North (z = −25)
+        (Vec3::new(  0.0, 2.5, -25.25_f32), 25.0_f32, 2.5_f32, 0.25_f32),
+        // South (z = +25)
+        (Vec3::new(  0.0, 2.5,  25.25), 25.0, 2.5, 0.25),
+        // West  (x = −25)
+        (Vec3::new(-25.25, 2.5,   0.0), 0.25, 2.5, 25.0),
+        // East  (x = +25)
+        (Vec3::new( 25.25, 2.5,   0.0), 0.25, 2.5, 25.0),
+    ] {
+        commands.spawn((
+            Name::new("HardcodedWall"),
+            HardcodedMap,
+            Transform::from_translation(pos),
+            RigidBody::Static,
+            Collider::cuboid(hx, hy, hz),
+        ));
+    }
+}
+
+#[cfg(not(feature = "server"))]
 fn spawn_hardcoded_map(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
