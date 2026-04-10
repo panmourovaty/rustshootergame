@@ -55,7 +55,7 @@ impl Default for PlayerProfile {
 
 fn generate_client_id() -> u64 {
     let mut buf = [0u8; 8];
-    getrandom::getrandom(&mut buf).expect("getrandom failed");
+    getrandom::fill(&mut buf).expect("getrandom fill failed");
     u64::from_le_bytes(buf)
 }
 

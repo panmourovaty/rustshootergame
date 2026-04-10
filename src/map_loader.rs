@@ -540,7 +540,7 @@ fn pick_spawn_point(spawn_points: &SpawnPoints) -> Vec3 {
         return Vec3::new(0.0, 2.0, 0.0);
     }
     let mut buf = [0u8; 8];
-    getrandom::getrandom(&mut buf).unwrap_or(());
+    getrandom::fill(&mut buf).unwrap_or(());
     let idx = u64::from_le_bytes(buf) as usize % points.len();
     points[idx]
 }

@@ -45,13 +45,13 @@ const RENDER_API: &str = "Metal";
 /// Windows: DirectX 12 only (requires Windows 11).
 /// macOS:   Metal only.
 #[cfg(not(target_arch = "wasm32"))]
-fn wgpu_backends() -> wgpu::Backends {
+fn wgpu_backends() -> bevy::render::settings::Backends {
     #[cfg(target_os = "linux")]
-    return wgpu::Backends::VULKAN | wgpu::Backends::GL;
+    return bevy::render::settings::Backends::VULKAN | bevy::render::settings::Backends::GL;
     #[cfg(target_os = "windows")]
-    return wgpu::Backends::DX12;
+    return bevy::render::settings::Backends::DX12;
     #[cfg(target_os = "macos")]
-    return wgpu::Backends::METAL;
+    return bevy::render::settings::Backends::METAL;
 }
 
 fn main() {

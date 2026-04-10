@@ -46,7 +46,7 @@ use crate::weapon::RemoteHitEvent;
 
 fn random_client_id() -> u64 {
     let mut buf = [0u8; 8];
-    getrandom::getrandom(&mut buf).expect("getrandom failed");
+    getrandom::fill(&mut buf).expect("getrandom failed");
     u64::from_le_bytes(buf)
 }
 
