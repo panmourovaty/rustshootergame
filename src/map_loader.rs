@@ -408,7 +408,7 @@ fn attach_map_colliders(
             mesh_entities.push((entity, mesh3d.0.clone()));
         }
         if let Ok(children) = children_of.get(entity) {
-            stack.extend(children.iter().copied());
+            stack.extend(children.iter());
         }
     }
 
