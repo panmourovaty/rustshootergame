@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy::window::CursorOptions;
 use avian3d::prelude::*;
-use crate::player::{Health, LocalPlayer, Player};
+use crate::player::{Health, LocalPlayer, Player, PlayerCamera};
 use crate::game::KillEvent;
 use crate::pvp::RemotePlayer;
 
@@ -132,7 +132,7 @@ fn handle_shooting(
     time: Res<Time>,
     mouse_btn: Res<ButtonInput<MouseButton>>,
     cursor_query: Query<&CursorOptions>,
-    camera_query: Query<&GlobalTransform, With<Camera3d>>,
+    camera_query: Query<&GlobalTransform, With<PlayerCamera>>,
     mut weapon_query: Query<(Entity, &mut Weapon), With<LocalPlayer>>,
     mut shoot_events: MessageWriter<ShootEvent>,
 ) {
