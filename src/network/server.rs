@@ -55,14 +55,15 @@ impl Plugin for ServerNetworkPlugin {
         });
 
         // Register messages and channels AFTER ServerPlugins.
-        app.add_plugins(ProtocolPlugin);
-        // Register the lightyear leafwing input channel + message types so the
-        // server can decode `InputMessage<LeafwingSequence<PlayerAction>>` packets
-        // sent by the client's `ClientInputPlugin`.  Without this the server
-        // logs `ChannelNotFound` / `MissingMessageId` errors on every packet.
+        // IMPORTANT: the leafwing input plugin MUST be registered before
+        // ProtocolPlugin so that the auto-assigned numeric IDs for
+        // InputChannel / InputMessage match the client side (where
+        // InputPlugin is added before ClientNetworkPlugin/ProtocolPlugin).
+        // A mismatch in registration order causes MissingMessageId errors.
         app.add_plugins(
             lightyear::prelude::input::leafwing::InputPlugin::<PlayerAction>::default(),
         );
+        app.add_plugins(ProtocolPlugin);
         app.add_plugins(GameServerPlugin);
 
         app.insert_resource(ServerPorts {
