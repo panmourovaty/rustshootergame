@@ -20,7 +20,7 @@ pub const WEAPON_RENDER_LAYER: usize = 1;
 #[derive(Component)]
 pub struct LocalPlayer;
 
-/// Generic player identification — used for scoring and networking.
+/// Generic player identification - used for scoring and networking.
 #[derive(Component, Clone)]
 pub struct Player {
     pub id: u64,
@@ -46,7 +46,7 @@ impl Default for Health {
 #[derive(Component)]
 pub struct PlayerCamera;
 
-/// Simple FPS controller — replaces bevy_fps_controller for Bevy 0.18 compat.
+/// Simple FPS controller - replaces bevy_fps_controller for Bevy 0.18 compat.
 /// Lives on the logical (physics) player entity.
 #[derive(Component)]
 pub struct FpsController {
@@ -130,7 +130,7 @@ pub fn spawn_local_player(
 ) {
     let spawn_pos = pick_spawn_point(&spawn_points);
 
-    // Gun meshes — created here, then moved into the camera child closure.
+    // Gun meshes - created here, then moved into the camera child closure.
     let gun_body_mesh = meshes.add(Cuboid::new(0.04, 0.08, 0.35));
     let gun_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.12, 0.12, 0.12),
@@ -202,7 +202,7 @@ pub fn spawn_local_player(
                         RenderLayers::layer(WEAPON_RENDER_LAYER),
                         Transform::default(),
                     ));
-                    // Gun body — weapon layer only.
+                    // Gun body - weapon layer only.
                     cam.spawn((
                         Name::new("GunBody"),
                         Mesh3d(gun_body_mesh),
@@ -210,7 +210,7 @@ pub fn spawn_local_player(
                         Transform::from_xyz(0.2, -0.15, -0.4),
                         RenderLayers::layer(WEAPON_RENDER_LAYER),
                     ));
-                    // Barrel extension — weapon layer only.
+                    // Barrel extension - weapon layer only.
                     cam.spawn((
                         Name::new("GunBarrel"),
                         Mesh3d(barrel_mesh),

@@ -3,8 +3,8 @@
 /// Uses lightyear 0.26 (Bevy 0.18 compatible).
 ///
 /// Feature gates:
-///   `networking`  — native builds: UDP + WebTransport client + server
-///   `web`         — WASM builds: WebTransport client only (no UDP, no server)
+///   `networking`  - native builds: UDP + WebTransport client + server
+///   `web`         - WASM builds: WebTransport client only (no UDP, no server)
 
 // Protocol is shared by both native and WASM builds.
 #[cfg(any(feature = "networking", feature = "web"))]

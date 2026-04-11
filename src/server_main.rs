@@ -1,4 +1,4 @@
-/// Dedicated-server binary — headless, no rendering, no connect screen.
+/// Dedicated-server binary - headless, no rendering, no connect screen.
 use bevy::prelude::*;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -85,11 +85,11 @@ fn load_config() -> ServerConfig {
         }
     } else {
         if explicit_path.is_some() {
-            // User gave a path that doesn't exist — that's clearly a mistake.
+            // User gave a path that doesn't exist - that's clearly a mistake.
             eprintln!("ERROR: config file '{}' not found.", path_str);
             std::process::exit(1);
         }
-        // No explicit path, no default file — silently use built-in defaults.
+        // No explicit path, no default file - silently use built-in defaults.
         info!("No server_config.toml found; using built-in defaults.");
         ServerConfig::default()
     }
@@ -146,7 +146,7 @@ fn main() {
         .insert_resource(MapUrl(config.map_url))
         .insert_resource(identity)
         .add_plugins(MinimalPlugins)
-        // MinimalPlugins omits LogPlugin — add it so info!/warn!/error! work.
+        // MinimalPlugins omits LogPlugin - add it so info!/warn!/error! work.
         .add_plugins(bevy::log::LogPlugin::default())
         // MinimalPlugins does not include StatesPlugin (only DefaultPlugins does).
         // Add it explicitly so the StateTransition schedule exists before
@@ -158,7 +158,7 @@ fn main() {
         // channel is never initialised and Bevy panics at startup.  Adding
         // AssetPlugin (headless, no renderer required) and registering Mesh as
         // an asset type satisfies avian3d even though the server never loads
-        // mesh assets — it uses only explicit Collider primitives.
+        // mesh assets - it uses only explicit Collider primitives.
         .add_plugins(bevy::asset::AssetPlugin::default())
         .init_asset::<Mesh>()
         .add_plugins(avian3d::PhysicsPlugins::default())

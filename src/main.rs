@@ -1,4 +1,4 @@
-/// Client binary — shows the connect screen, then runs the full game.
+/// Client binary - shows the connect screen, then runs the full game.
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 

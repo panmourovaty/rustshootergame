@@ -1,8 +1,8 @@
-/// Dedicated-server network plugin — lightyear 0.26 entity-based API.
+/// Dedicated-server network plugin - lightyear 0.26 entity-based API.
 ///
 /// Listens on two transports simultaneously:
-///   UDP           — native clients (port `--port`, default 7777)
-///   WebTransport  — browser/WASM clients (port `--web-port`, default 7778)
+///   UDP           - native clients (port `--port`, default 7777)
+///   WebTransport  - browser/WASM clients (port `--web-port`, default 7778)
 ///
 /// A self-signed TLS certificate is generated at startup for WebTransport.
 /// The SHA-256 fingerprint is printed so operators can bake it into the WASM
@@ -236,7 +236,7 @@ fn handle_join_msg(
 
         let connected_count = announce_senders.iter().count();
         warn!(
-            "[SERVER] Player '{}' (id={}) joined — broadcasting to {} connected clients",
+            "[SERVER] Player '{}' (id={}) joined - broadcasting to {} connected clients",
             join_msg.username, join_msg.client_id, connected_count
         );
 

@@ -1,4 +1,4 @@
-# RustShooter — Server Configuration
+# RustShooter - Server Configuration
 #
 # Copy this file to server_config.toml (in the same directory as the server
 # binary) and adjust the values you need.
@@ -38,8 +38,8 @@ kill_limit = 20
 # placeholder map.
 #
 # The archive must be a .tar.zst and may contain:
-#   scene.glb        — 3-D level geometry (required)
-#   skybox.webp      — cubemap sky image: a vertical strip of 6 square faces
+#   scene.glb        - 3-D level geometry (required)
+#   skybox.webp      - cubemap sky image: a vertical strip of 6 square faces
 #                      arranged top-to-bottom in this order:
 #                        +X (right), -X (left), +Y (top), -Y (bottom),
 #                        +Z (front), -Z (back)
@@ -51,7 +51,7 @@ kill_limit = 20
 #
 # WebTransport requires TLS.  There are two modes:
 #
-# 1. Self-signed (default — no config needed)
+# 1. Self-signed (default - no config needed)
 #    The server generates a fresh ECDSA P-256 certificate on every startup.
 #    Browsers trust it via a SHA-256 fingerprint baked into the WASM client at
 #    compile time.  The W3C spec caps self-signed cert validity at 14 days, so

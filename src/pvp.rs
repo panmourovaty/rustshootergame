@@ -146,7 +146,7 @@ fn spawn_remote_player(
             ev.client_id, ev.username, profile.client_id
         );
 
-        // Skip our own join — we are the local player, not a remote one.
+        // Skip our own join - we are the local player, not a remote one.
         if ev.client_id == profile.client_id {
             warn!("[PVP] Skipping self-join for id={}", ev.client_id);
             continue;
@@ -164,7 +164,7 @@ fn spawn_remote_player(
         let spawn_pos = Vec3::new(0.0, 0.85, 0.0);
         let spawn_rot = Quat::IDENTITY;
 
-        // Weapon meshes — same appearance as the local player's gun.
+        // Weapon meshes - same appearance as the local player's gun.
         let gun_body_mesh = meshes.add(Cuboid::new(0.04, 0.08, 0.35));
         let gun_material  = materials.add(StandardMaterial {
             base_color: Color::srgb(0.12, 0.12, 0.12),
@@ -204,7 +204,7 @@ fn spawn_remote_player(
                 to_pos: spawn_pos,
                 from_rot: spawn_rot,
                 to_rot: spawn_rot,
-                elapsed: INTERP_DURATION, // already "done" — no movement until first update
+                elapsed: INTERP_DURATION, // already "done" - no movement until first update
             },
         ))
         .with_children(|parent| {
@@ -252,7 +252,7 @@ fn despawn_remote_player(
 }
 
 /// Reads incoming network snapshots and sets the interpolation target.
-/// Does NOT write to `Transform` directly — `interpolate_remote_players` does that.
+/// Does NOT write to `Transform` directly - `interpolate_remote_players` does that.
 fn receive_remote_player_pos(
     mut events: MessageReader<RemotePlayerMoved>,
     remote_players: Res<RemotePlayers>,
@@ -313,8 +313,8 @@ fn handle_remote_kill(
 ) {
     for ev in remote_kill_events.read() {
         // Convert the server-confirmed kill into a local KillEvent.
-        // Score updates are handled by `record_kills` — the single source
-        // of truth for score mutations — so we only write the event here.
+        // Score updates are handled by `record_kills` - the single source
+        // of truth for score mutations - so we only write the event here.
         kill_events.write(KillEvent {
             killer_id: ev.killer_id,
             victim_id: ev.victim_id,

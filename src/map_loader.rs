@@ -130,7 +130,7 @@ struct PendingSkybox(Handle<Image>);
 /// This two-step approach is necessary because avian3d processes
 /// `ColliderConstructorHierarchy` in PostUpdate of the same frame it is added,
 /// but Bevy's SceneSpawner only creates the GLTF child entities in the *next*
-/// frame's PreUpdate — so adding the hierarchy at spawn time means avian3d
+/// frame's PreUpdate - so adding the hierarchy at spawn time means avian3d
 /// sees no children, marks the hierarchy done, and never creates any colliders.
 #[derive(Resource)]
 struct PendingMapCollider(Entity);
@@ -219,7 +219,7 @@ fn handle_load_map_event(
         let url = event.0.clone();
         info!("[MAP] Starting download: {}", url);
 
-        // Cancel the waiting timeout — a map URL arrived.
+        // Cancel the waiting timeout - a map URL arrived.
         commands.remove_resource::<WaitingForMapTimeout>();
 
         // Update the overlay that was spawned by show_waiting_overlay.
@@ -280,7 +280,7 @@ fn poll_download(
     match result {
         Err(e) => {
             error!("[MAP] Download/extract failed: {}", e);
-            // Remove the overlay — don't leave a black screen on failure.
+            // Remove the overlay - don't leave a black screen on failure.
             for entity in overlay_query.iter() {
                 commands.entity(entity).despawn();
             }
@@ -288,7 +288,7 @@ fn poll_download(
         Ok(extracted) => {
             info!("[MAP] Extracted {} files; inserting into map:// source", extracted.files.len());
 
-            // Advance the overlay message — download done, now waiting for GPU upload.
+            // Advance the overlay message - download done, now waiting for GPU upload.
             for mut text in label_query.iter_mut() {
                 **text = "Loading map assets...".to_string();
             }
@@ -334,7 +334,7 @@ fn poll_download(
                                 });
                                 let handle = images.add(img);
                                 commands.insert_resource(PendingSkybox(handle));
-                                info!("[MAP] skybox.webp decoded as cubemap — will apply to camera");
+                                info!("[MAP] skybox.webp decoded as cubemap - will apply to camera");
                             }
                             Err(e) => {
                                 warn!("[MAP] skybox.webp is not a valid 6-face vertical strip ({:?}); skipping", e);
@@ -352,7 +352,7 @@ fn poll_download(
                 map_dir.0.insert_asset(Path::new(path_str), data.clone());
             }
 
-            // Begin loading scene.glb — with GLTF→Bevy coordinate conversion enabled.
+            // Begin loading scene.glb - with GLTF→Bevy coordinate conversion enabled.
             // GLTF uses +Z-forward / −X-right; Bevy uses −Z-forward / +X-right.
             // rotate_scene_entity applies a 180° Y rotation to the scene root so
             // normals, lighting and geometry all align with Bevy's coordinate system.
@@ -403,7 +403,7 @@ fn poll_gltf_loaded(
         return;
     }
 
-    info!("[MAP] GLTF ready — swapping map");
+    info!("[MAP] GLTF ready - swapping map");
 
     // Despawn the previous dynamic map (if any).
     for entity in dynamic_query.iter() {
@@ -416,7 +416,7 @@ fn poll_gltf_loaded(
 
     // Spawn the visual scene.  ColliderConstructorHierarchy is NOT added here
     // because Bevy's SceneSpawner won't instantiate the child entities until
-    // the next frame's PreUpdate — see `attach_map_colliders` below.
+    // the next frame's PreUpdate - see `attach_map_colliders` below.
     if let Some(gltf) = gltf_assets.get(&loading.scene) {
         let scene_handle = gltf
             .default_scene
@@ -433,7 +433,7 @@ fn poll_gltf_loaded(
         info!("[MAP] Map scene spawned; waiting for SceneSpawner before attaching colliders");
     }
 
-    // Keep the overlay up — it will be removed by attach_map_colliders once
+    // Keep the overlay up - it will be removed by attach_map_colliders once
     // the colliders exist and the player has been teleported to the floor.
     for mut text in label_query.iter_mut() {
         **text = "Setting up physics...".to_string();
@@ -448,7 +448,7 @@ fn poll_gltf_loaded(
 /// point before removing the loading overlay.
 ///
 /// We avoid `ColliderConstructorHierarchy` here because avian3d marks the
-/// hierarchy "done" in the same PostUpdate pass it is added — if the GLTF
+/// hierarchy "done" in the same PostUpdate pass it is added - if the GLTF
 /// scene root entity happens to have children at that point but the mesh
 /// assets aren't surfaced correctly, no colliders are created and the bug
 /// is silent.  Creating colliders explicitly lets us confirm success and
@@ -478,7 +478,7 @@ fn attach_map_colliders(
     }
 
     if mesh_entities.is_empty() {
-        return; // Scene not instantiated yet — retry next frame.
+        return; // Scene not instantiated yet - retry next frame.
     }
 
     // Build trimesh colliders from mesh data.  If a mesh asset isn't ready
@@ -487,7 +487,7 @@ fn attach_map_colliders(
     let mut created = 0usize;
     for (entity, handle) in &mesh_entities {
         let Some(mesh) = meshes.get(handle) else {
-            return; // Asset not ready — retry next frame.
+            return; // Asset not ready - retry next frame.
         };
         match Collider::trimesh_from_mesh(mesh) {
             Some(collider) => {
@@ -495,7 +495,7 @@ fn attach_map_colliders(
                 created += 1;
             }
             None => {
-                warn!("[MAP] trimesh_from_mesh returned None for {:?} — skipping", entity);
+                warn!("[MAP] trimesh_from_mesh returned None for {:?} - skipping", entity);
             }
         }
     }
@@ -511,7 +511,7 @@ fn attach_map_colliders(
         info!("[MAP] Player teleported to spawn {:?}", spawn_pos);
     }
 
-    // Floor is solid and player is positioned — safe to reveal the scene.
+    // Floor is solid and player is positioned - safe to reveal the scene.
     for entity in overlay_query.iter() {
         commands.entity(entity).despawn();
     }
@@ -603,7 +603,7 @@ fn extract_archive(compressed: &[u8]) -> Result<ExtractedMap, String> {
             .trim_start_matches("./")
             .replace('\\', "/");
 
-        // Skip directory entries — their paths end with '/' (or have no
+        // Skip directory entries - their paths end with '/' (or have no
         // file_name component), and Dir::insert_asset would panic on the
         // file_name().unwrap() it performs internally.
         if Path::new(&path_str).file_name().is_none() {

@@ -9,7 +9,7 @@ pub struct WeaponPlugin;
 
 // ─── Components ─────────────────────────────────────────────────────────────
 
-/// Pistol weapon state — lives on the logical player entity.
+/// Pistol weapon state - lives on the logical player entity.
 #[derive(Component)]
 pub struct Weapon {
     pub ammo: u32,
@@ -171,7 +171,7 @@ fn handle_shooting(
         }
 
         if weapon.ammo == 0 {
-            info!("Magazine empty — press R to reload.");
+            info!("Magazine empty - press R to reload.");
         }
     }
 }
@@ -218,7 +218,7 @@ fn process_shoot_events(
                 );
             } else if health_query.get(hit.entity).is_ok() {
                 // Local entity with health (e.g. local player if they could
-                // somehow shoot themselves — kept for future use).
+                // somehow shoot themselves - kept for future use).
                 hit_events.write(HitEvent {
                     shooter_entity: event.shooter,
                     target: hit.entity,
@@ -256,7 +256,7 @@ fn apply_damage(
         if let Ok((mut health, victim_player)) = health_query.get_mut(event.target) {
             health.current -= event.damage;
             info!(
-                "Hit! {:.0} damage dealt — {:.0}/{:.0} HP remaining",
+                "Hit! {:.0} damage dealt - {:.0}/{:.0} HP remaining",
                 event.damage, health.current, health.max
             );
 

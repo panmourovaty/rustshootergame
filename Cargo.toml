@@ -80,7 +80,7 @@ lightyear_aeronet = { version = "0.26", optional = true, default-features = fals
 # so it can use the browser's crypto.getRandomValues() API.
 serde = { version = "1", features = ["derive"] }
 
-# Map archive loading — pure Rust, compile on all targets.
+# Map archive loading - pure Rust, compile on all targets.
 ruzstd = "0.8"
 tar = "0.4"
 

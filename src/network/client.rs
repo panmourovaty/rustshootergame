@@ -1,4 +1,4 @@
-/// Client network plugin — lightyear 0.26.
+/// Client network plugin - lightyear 0.26.
 ///
 /// Native builds use UDP; WASM builds use WebTransport.
 ///
@@ -129,7 +129,7 @@ fn start_connecting(
     mut next_state: ResMut<NextState<GameState>>,
     mut conn_error: ResMut<ConnectionError>,
 ) {
-    // Insert ConnectTimeout FIRST — before any early return — so that
+    // Insert ConnectTimeout FIRST - before any early return - so that
     // tick_timeout never panics with "Resource does not exist".
     commands.insert_resource(ConnectTimeout(Timer::from_seconds(15.0, TimerMode::Once)));
     commands.init_resource::<PosUpdateTimer>();
@@ -377,7 +377,7 @@ fn send_join_msg(
         warn!("[NET] Sent JoinMsg: id={} username='{}'", msg.client_id, msg.username);
     }
     if !sent {
-        warn!("[NET] send_join_msg: query returned nothing — MessageSender<JoinMsg> not found!");
+        warn!("[NET] send_join_msg: query returned nothing - MessageSender<JoinMsg> not found!");
     }
 }
 
@@ -463,7 +463,7 @@ fn process_server_messages(
             });
         }
 
-        // RelayedPosMsg — skip our own updates to avoid overwriting local transform.
+        // RelayedPosMsg - skip our own updates to avoid overwriting local transform.
         for msg in pos_rx.receive() {
             if msg.client_id == profile.client_id {
                 continue;
@@ -484,7 +484,7 @@ fn process_server_messages(
         // KillNotifyMsg
         for msg in kill_rx.receive() {
             info!(
-                "Server: kill confirmed — {} killed {}",
+                "Server: kill confirmed - {} killed {}",
                 msg.killer_id, msg.victim_id
             );
             kill_events.write(RemoteKillEvent {
@@ -493,7 +493,7 @@ fn process_server_messages(
             });
         }
 
-        // MapUrlMsg — server is telling us which map to load.
+        // MapUrlMsg - server is telling us which map to load.
         for msg in map_url_rx.receive() {
             info!("[MAP] Server sent map URL: {}", msg.url);
             map_url_events.write(LoadMapFromUrl(msg.url));
@@ -537,7 +537,7 @@ fn send_remote_hits(
 ///   Hostname bare:   `example.com`    → `example.com:7777`
 ///   Hostname:port:   `example.com:80` → unchanged
 fn append_default_port(addr: &str) -> String {
-    // Bracketed IPv6 — either [::1]:port (has port) or [::1] (no port).
+    // Bracketed IPv6 - either [::1]:port (has port) or [::1] (no port).
     if addr.starts_with('[') {
         return if addr.contains("]:") {
             addr.to_string()
@@ -550,7 +550,7 @@ fn append_default_port(addr: &str) -> String {
         if addr.parse::<std::net::IpAddr>().is_ok() {
             return format!("[{}]:7777", addr);
         }
-        // host:port — already has a port separator.
+        // host:port - already has a port separator.
         return addr.to_string();
     }
     // IPv4 or hostname without port.

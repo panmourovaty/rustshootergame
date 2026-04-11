@@ -1,6 +1,6 @@
 /// Shared network protocol definitions used by both the server and client.
 ///
-/// Shared protocol — compatible with lightyear 0.26 / Bevy 0.18.
+/// Shared protocol - compatible with lightyear 0.26 / Bevy 0.18.
 
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -76,12 +76,12 @@ pub struct WelcomeMessage {
 
 // ─── Channels ────────────────────────────────────────────────────────────────
 
-/// Reliable ordered channel — used for game state messages (joins, leaves,
+/// Reliable ordered channel - used for game state messages (joins, leaves,
 /// kills, damage).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GameChannel;
 
-/// Unreliable channel — used for high-frequency position updates.
+/// Unreliable channel - used for high-frequency position updates.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PosChannel;
 

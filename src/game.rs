@@ -7,7 +7,7 @@ pub struct GamePlugin;
 
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum GameState {
-    /// Initial state — client shows connect screen; server skips straight to Loading.
+    /// Initial state - client shows connect screen; server skips straight to Loading.
     #[default]
     ConnectScreen,
     /// Network handshake in progress; transitions to Playing on success or back
@@ -180,10 +180,10 @@ impl Plugin for GamePlugin {
 /// pointing straight down.
 fn setup_lighting(mut commands: Commands, ambient: Option<ResMut<GlobalAmbientLight>>) {
     // GlobalAmbientLight only exists when bevy_pbr/LightPlugin is active (client).
-    // The server runs MinimalPlugins so this resource is absent — skip silently.
+    // The server runs MinimalPlugins so this resource is absent - skip silently.
     let Some(mut ambient) = ambient else { return };
 
-    // Sky-blue ambient fill — keeps shadowed areas from going pitch-black.
+    // Sky-blue ambient fill - keeps shadowed areas from going pitch-black.
     ambient.color = Color::srgb(0.55, 0.65, 0.85);
     ambient.brightness = 400.0;
 

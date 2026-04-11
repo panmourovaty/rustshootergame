@@ -6,7 +6,7 @@ A Counter-Strike-inspired FPS built with Bevy + lightyear.
 
 ## Table of Contents
 
-1. [Quick Start — LAN Play](#1-quick-start--lan-play)
+1. [Quick Start - LAN Play](#1-quick-start--lan-play)
 2. [Choosing the Right Binary](#2-choosing-the-right-binary)
 3. [Running the Server](#3-running-the-server)
 4. [Running the Native Client](#4-running-the-native-client)
@@ -17,7 +17,7 @@ A Counter-Strike-inspired FPS built with Bevy + lightyear.
 
 ---
 
-## 1. Quick Start — LAN Play
+## 1. Quick Start - LAN Play
 
 This is the minimum to get two people playing on the same network.
 
@@ -45,8 +45,8 @@ The server prints its IP and ports on startup:
 ```
 
 At the connect screen enter:
-- **Username** — anything you like
-- **Server Address** — the LAN IP of the host machine (e.g. `192.168.1.10`)
+- **Username** - anything you like
+- **Server Address** - the LAN IP of the host machine (e.g. `192.168.1.10`)
 
 Click **CONNECT** or press **Enter**.
 
@@ -63,10 +63,10 @@ Download from the [latest GitHub Release](../../releases/latest).
 | File | OS | When to use |
 |------|----|-------------|
 | `client-windows-x86_64.exe` | Windows | Any modern Windows PC (Haswell CPU or newer) |
-| `client-linux-amd64` | Linux x86-64 | Safe fallback — works on any x86-64 CPU |
-| `client-linux-amd64-v3` | Linux x86-64 | Faster — requires Haswell / Zen 1+ (2013+) |
-| `client-linux-arm64` | Linux ARM64 | Safe fallback — any AArch64 board/device |
-| `client-linux-arm64-sve` | Linux ARM64 | Faster — requires Graviton 3 / Neoverse V1+ |
+| `client-linux-amd64` | Linux x86-64 | Safe fallback - works on any x86-64 CPU |
+| `client-linux-amd64-v3` | Linux x86-64 | Faster - requires Haswell / Zen 1+ (2013+) |
+| `client-linux-arm64` | Linux ARM64 | Safe fallback - any AArch64 board/device |
+| `client-linux-arm64-sve` | Linux ARM64 | Faster - requires Graviton 3 / Neoverse V1+ |
 | `client-macos-arm64` | macOS Apple Silicon | M1/M2/M3/M4 Macs |
 | `client-web.zip` | Browser | See [§6 Browser / WASM Client](#6-browser--wasm-client) |
 
@@ -76,10 +76,10 @@ Download from the [latest GitHub Release](../../releases/latest).
 
 | File | OS | When to use |
 |------|----|-------------|
-| `server-linux-amd64` | Linux x86-64 | Safe fallback — any x86-64 CPU |
-| `server-linux-amd64-v3` | Linux x86-64 | Faster — requires Haswell / Zen 1+ |
-| `server-linux-arm64` | Linux ARM64 | Safe fallback — any AArch64 |
-| `server-linux-arm64-sve` | Linux ARM64 | Faster — requires Graviton 3 / Neoverse V1+ |
+| `server-linux-amd64` | Linux x86-64 | Safe fallback - any x86-64 CPU |
+| `server-linux-amd64-v3` | Linux x86-64 | Faster - requires Haswell / Zen 1+ |
+| `server-linux-arm64` | Linux ARM64 | Safe fallback - any AArch64 |
+| `server-linux-arm64-sve` | Linux ARM64 | Faster - requires Graviton 3 / Neoverse V1+ |
 
 The server has no GUI. Run it headless on any Linux machine or VPS.
 
@@ -175,13 +175,13 @@ The connect screen appears. Enter your username and the server address, then cli
 
 ### Pre-set server address (kiosk / event mode)
 
-Set `RSG_SERVER_ADDR` before launching — see [§5](#5-environment-variable-rsg_server_addr).
+Set `RSG_SERVER_ADDR` before launching - see [§5](#5-environment-variable-rsg_server_addr).
 
 ---
 
 ## 5. Environment Variable: RSG_SERVER_ADDR
 
-When `RSG_SERVER_ADDR` is set, the **Server Address field is hidden** from the connect screen. Players only need to enter a username and hit **CONNECT** — useful for LAN events, managed deployments, or bundled executables.
+When `RSG_SERVER_ADDR` is set, the **Server Address field is hidden** from the connect screen. Players only need to enter a username and hit **CONNECT** - useful for LAN events, managed deployments, or bundled executables.
 
 ```bash
 # Linux / macOS
@@ -223,7 +223,7 @@ The WASM client connects over **WebTransport** (HTTPS/HTTP3), not plain UDP. Thi
 
 2. The WASM binary must be compiled with that fingerprint **baked in** via the `RSG_CERT_DIGEST` environment variable. The compiled WASM then presents the fingerprint to the browser, which allows the self-signed cert.
 
-3. Each time the server restarts it generates a **new** certificate. The WASM build must be recompiled (or the server must keep its cert on disk between restarts — not yet implemented).
+3. Each time the server restarts it generates a **new** certificate. The WASM build must be recompiled (or the server must keep its cert on disk between restarts - not yet implemented).
 
 ### Using the pre-built WASM from GitHub Releases
 
@@ -234,7 +234,7 @@ For a persistent server you should build the WASM yourself (see [§7.3](#73-wasm
 ### Locking the server address (server.txt)
 
 `client-web.zip` includes a `server.txt` file. Edit it to contain your server's
-address before deploying — the browser client reads it at page load and hides
+address before deploying - the browser client reads it at page load and hides
 the address field, exactly like `RSG_SERVER_ADDR` on native builds:
 
 ```
@@ -286,13 +286,13 @@ cargo build --release --bin server
 
 ### 7.3 WASM client
 
-Step 1 — start the server and copy the cert digest from its startup output:
+Step 1 - start the server and copy the cert digest from its startup output:
 
 ```
 WebTransport listener on 0.0.0.0:7778 | cert digest: 4a9f3cABCD...
 ```
 
-Step 2 — compile the WASM client with that digest:
+Step 2 - compile the WASM client with that digest:
 
 ```bash
 RSG_CERT_DIGEST=4a9f3cABCD... \
@@ -304,7 +304,7 @@ cargo build \
   --bin client
 ```
 
-Step 3 — run `wasm-bindgen` and optimise with `wasm-opt`:
+Step 3 - run `wasm-bindgen` and optimise with `wasm-opt`:
 
 ```bash
 wasm-bindgen \
@@ -312,7 +312,7 @@ wasm-bindgen \
   --target web \
   target/wasm32-unknown-unknown/wasm-release/client.wasm
 
-# Shrink and optimise the output (requires binaryen — see below)
+# Shrink and optimise the output (requires binaryen - see below)
 wasm-opt -Oz --strip-debug --vacuum --enable-reference-types \
   dist/client_bg.wasm \
   -o dist/client_bg.wasm
@@ -331,16 +331,16 @@ brew install binaryen
 winget install WebAssembly.Binaryen
 ```
 
-Step 4 — serve `dist/` over HTTPS. Any local dev server with TLS works (e.g. `caddy file-server --listen :8443 --root dist/`).
+Step 4 - serve `dist/` over HTTPS. Any local dev server with TLS works (e.g. `caddy file-server --listen :8443 --root dist/`).
 
-> **Note:** Leave `RSG_CERT_DIGEST` unset (or empty) if your server uses a proper CA-signed certificate — the browser will trust it automatically.
+> **Note:** Leave `RSG_CERT_DIGEST` unset (or empty) if your server uses a proper CA-signed certificate - the browser will trust it automatically.
 
 ### 7.4 Cargo features
 
 | Feature | What it enables |
 |---------|-----------------|
-| `networking` (default) | UDP + WebTransport — native client + full server |
-| `web` | WebTransport only — WASM client (no UDP, no server code) |
+| `networking` (default) | UDP + WebTransport - native client + full server |
+| `web` | WebTransport only - WASM client (no UDP, no server code) |
 
 ---
 
@@ -392,7 +392,7 @@ binary at compile time**.
    new binary at roughly the same time. The 14-day window gives you time to
    plan this; it is not instant.
 
-> **Tip — avoid surprise expiry:** schedule a cron job that rebuilds the WASM
+> **Tip - avoid surprise expiry:** schedule a cron job that rebuilds the WASM
 > and restarts the server together before the 14 days are up. A simple
 > weekly restart keeps the cert fresh with a comfortable margin.
 
@@ -419,7 +419,7 @@ recompiled because of a certificate rotation.
 sudo apt-get install certbot       # Debian / Ubuntu
 # or: brew install certbot         # macOS
 
-# Issue a certificate (HTTP-01 challenge — requires port 80 to be open briefly)
+# Issue a certificate (HTTP-01 challenge - requires port 80 to be open briefly)
 sudo certbot certonly --standalone -d play.example.com
 
 # Certbot writes the files to:

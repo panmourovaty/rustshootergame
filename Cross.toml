@@ -1,4 +1,4 @@
-# Cross.toml — used if cross-compiling with `cross` instead of the native
+# Cross.toml - used if cross-compiling with `cross` instead of the native
 # GitHub Actions runners defined in release.yml.
 
 [build]

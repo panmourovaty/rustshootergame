@@ -20,12 +20,12 @@ permissions:
 #   CLOUDFLARE_PAGES_PROJECT  Name of the Cloudflare Pages project to deploy to.
 #                             Create the project once at
 #                             https://dash.cloudflare.com → Pages → Create a project
-#                             (choose "Direct Upload" — CI will handle all uploads).
+#                             (choose "Direct Upload" - CI will handle all uploads).
 #
 #   DOCKERHUB_TOKEN           Docker Hub access token (Settings → Security →
 #                             New Access Token).  Use a token, not your password.
 #                             The Docker Hub username is taken from
-#                             github.repository_owner — no extra secret needed.
+#                             github.repository_owner - no extra secret needed.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # ── Client — Windows x86-64 (x86-64-v3) ─────────────────────────────
+          # ── Client - Windows x86-64 (x86-64-v3) ─────────────────────────────
           # Windows 11's minimum supported CPUs (Intel 8th-gen / AMD Zen+)
           # all implement AVX2 + FMA + BMI2, so v3 is the correct baseline.
           - os: windows-latest
@@ -49,7 +49,7 @@ jobs:
             asset_name: client-windows-x86_64.exe
             rustflags: "-C target-cpu=x86-64-v3"
 
-          # ── Client — Linux x86-64 (x86-64-v2) ──────────────────────────────
+          # ── Client - Linux x86-64 (x86-64-v2) ──────────────────────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: client
@@ -57,7 +57,7 @@ jobs:
             asset_name: client-linux-amd64
             rustflags: "-C target-cpu=x86-64-v2"
 
-          # ── Client — Linux ARM64 NEON baseline ──────────────────────────────
+          # ── Client - Linux ARM64 NEON baseline ──────────────────────────────
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             binary: client
@@ -65,7 +65,7 @@ jobs:
             asset_name: client-linux-arm64
             rustflags: ""
 
-          # ── Client — macOS Apple Silicon (NEON; no SVE on Apple chips) ───────
+          # ── Client - macOS Apple Silicon (NEON; no SVE on Apple chips) ───────
           - os: macos-latest
             target: aarch64-apple-darwin
             binary: client
@@ -73,7 +73,7 @@ jobs:
             asset_name: client-macos-arm64
             rustflags: ""
 
-          # ── Server — Linux x86-64 (x86-64-v2) ──────────────────────────────
+          # ── Server - Linux x86-64 (x86-64-v2) ──────────────────────────────
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: server
@@ -81,7 +81,7 @@ jobs:
             asset_name: server-linux-amd64
             rustflags: "-C target-cpu=x86-64-v2"
 
-          # ── Server — Linux ARM64 NEON baseline ──────────────────────────────
+          # ── Server - Linux ARM64 NEON baseline ──────────────────────────────
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             binary: server
@@ -91,7 +91,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -142,7 +142,7 @@ jobs:
             "${{ matrix.asset_name }}"
 
       - name: Upload build artefact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
           path: ${{ matrix.asset_name }}
@@ -155,7 +155,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Install Rust toolchain (with wasm32 target)
         uses: dtolnay/rust-toolchain@stable
@@ -217,7 +217,7 @@ jobs:
           cp web/_headers web-dist/_headers
 
       - name: Upload WASM artefact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: web-dist
           path: web-dist/
@@ -231,14 +231,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-  # ── Docker image — Alpine Linux server (native builds per arch) ─────────────
+  # ── Docker image - Alpine Linux server (native builds per arch) ─────────────
   build-docker-amd64:
     name: Build Docker image (linux/amd64)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -267,7 +267,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -315,7 +315,7 @@ jobs:
             ${IMAGE}:${{ github.sha }}-amd64 \
             ${IMAGE}:${{ github.sha }}-arm64
 
-  # ── GitHub Release (main branch only, rolling "latest") ─────────────────────
+# ── GitHub Release (main branch only, rolling "latest") ─────────────────────
   release:
     name: Publish GitHub Release
     needs: [build-native, build-wasm]
@@ -324,13 +324,13 @@ jobs:
 
     steps:
       - name: Download all native build artefacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           path: dist/
           pattern: "client-*,server-*"
 
       - name: Download WASM artefact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           path: dist/web-dist/
           name: web-dist
@@ -345,17 +345,18 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: latest
+          commit: ${{ github.sha }}
           name: "Latest Build"
           body: |
-            Automated build from the `main` branch — commit ${{ github.sha }}.
+            Automated build from the `main` branch - commit ${{ github.sha }}.
 
             ### Client
 
             | Binary | Platform | Notes |
             |--------|----------|-------|
-            | `client-windows-x86_64.exe` | Windows x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) — Windows 11 minimum CPUs all support this |
+            | `client-windows-x86_64.exe` | Windows x86-64 | x86-64-v3 (AVX2 + FMA + BMI2) - Windows 11 minimum CPUs all support this |
             | `client-linux-amd64` | Linux x86-64 | x86-64-v2 (SSE4.2 + POPCNT) |
-            | `client-linux-arm64` | Linux ARM64 | NEON baseline — runs on any AArch64 |
+            | `client-linux-arm64` | Linux ARM64 | NEON baseline - runs on any AArch64 |
             | `client-macos-arm64` | macOS Apple Silicon | NEON |
             | `client-web.zip` | Browser (WASM) | Also live on Cloudflare Pages |
 
@@ -364,9 +365,9 @@ jobs:
             | Binary | Platform | Notes |
             |--------|----------|-------|
             | `server-linux-amd64` | Linux x86-64 | x86-64-v2 (SSE4.2 + POPCNT) |
-            | `server-linux-arm64` | Linux ARM64 | NEON baseline — runs on any AArch64 |
-          prerelease: true
+            | `server-linux-arm64` | Linux ARM64 | NEON baseline - runs on any AArch64 |
+          prerelease: false
           allowUpdates: true
-          removeArtifacts: true
+          replacesArtifacts: true
           artifacts: "dist/client-*/*,dist/server-*/*,dist/client-web.zip"
           token: ${{ secrets.GITHUB_TOKEN }}
