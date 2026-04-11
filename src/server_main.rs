@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
 mod game;
+mod input;
 mod map;
 mod network;
 
@@ -152,6 +153,10 @@ fn main() {
         // Add it explicitly so the StateTransition schedule exists before
         // insert_state is called.
         .add_plugins(bevy::state::app::StatesPlugin)
+        // InputPlugin is needed by lightyear_inputs_leafwing so that
+        // InputManagerPlugin::server() can register keyboard/mouse input
+        // types for reflection and deserialization.
+        .add_plugins(bevy::input::InputPlugin)
         // MinimalPlugins omits AssetPlugin, but avian3d's collider-from-mesh
         // feature registers a `clear_unused_colliders` system that reads
         // MessageReader<AssetEvent<Mesh>>.  Without AssetPlugin the message

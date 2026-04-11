@@ -39,6 +39,7 @@ use super::protocol::{
     GameChannel, HitMsg, JoinMsg, KillNotifyMsg, MapUrlMsg, PlayerJoinMsg, PlayerLeaveMsg,
     PosChannel, PosUpdateMsg, ProtocolPlugin, RelayedPosMsg, TakeDamageMsg, PROTOCOL_ID,
 };
+use crate::input::PlayerAction;
 
 // ─── Plugin ─────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,13 @@ impl Plugin for ServerNetworkPlugin {
 
         // Register messages and channels AFTER ServerPlugins.
         app.add_plugins(ProtocolPlugin);
+        // Register the lightyear leafwing input channel + message types so the
+        // server can decode `InputMessage<LeafwingSequence<PlayerAction>>` packets
+        // sent by the client's `ClientInputPlugin`.  Without this the server
+        // logs `ChannelNotFound` / `MissingMessageId` errors on every packet.
+        app.add_plugins(
+            lightyear::prelude::input::leafwing::InputPlugin::<PlayerAction>::default(),
+        );
         app.add_plugins(GameServerPlugin);
 
         app.insert_resource(ServerPorts {

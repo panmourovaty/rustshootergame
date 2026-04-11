@@ -774,24 +774,30 @@ fn handle_keybind_click(
 fn handle_keybind_input(
     mut key_events: MessageReader<KeyboardInput>,
     mut mouse_events: MessageReader<MouseButtonInput>,
-    mut listening: ResMut<ListeningForBind>,
+    mut listening: Option<ResMut<ListeningForBind>>,
     mut settings: ResMut<GameSettings>,
     mut input_map_query: Query<&mut InputMap<PlayerAction>, With<LocalPlayer>>,
     keybind_text_query: Query<(&KeybindButton, &Children), With<KeybindButton>>,
     mut text_query: Query<&mut Text>,
     mut commands: Commands,
 ) {
+    // Not listening for a keybind — nothing to do.
+    let Some(mut listening) = listening else {
+        // Drain events so they don't accumulate.
+        for _ in key_events.read() {}
+        for _ in mouse_events.read() {}
+        return;
+    };
+
     // ── Mark ready on the frame after the click ──────────────────────────
     if !listening.ready {
         listening.ready = true;
-        // Show "Press a key…" on the button being rebound.
+        // Show "Press a key..." on the button being rebound.
         for (keybind_btn, children) in keybind_text_query.iter() {
             if keybind_btn.0 == listening.action {
                 for child in children.iter() {
                     if let Ok(mut text) = text_query.get_mut(child) {
                         **text = "Press a key...".to_string();
-                        // We can't easily change TextColor from here without
-                        // adding a marker; we just set the text content.
                     }
                 }
             }
