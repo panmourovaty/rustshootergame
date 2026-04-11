@@ -322,18 +322,33 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
-    steps:
-      - name: Download all build artefacts
+steps:
+      - name: Create dist directory
+        run: mkdir -p dist
+
+      - name: Download Native Client Artefacts
         uses: actions/download-artifact@v4
         with:
           path: dist/
+          pattern: 'client-*'
+
+      - name: Download Native Server Artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          pattern: 'server-*'
+
+      - name: Download WASM Artefact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist/web-dist
 
       - name: Zip WASM web client
         run: zip -r dist/client-web.zip dist/web-dist/
 
       - name: List artefacts (for debugging)
         run: find dist/ -type f | sort
-
       - name: Create or update rolling "latest" release
         uses: ncipollo/release-action@v1
         with:
