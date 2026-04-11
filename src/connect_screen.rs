@@ -289,12 +289,12 @@ fn spawn_connecting_screen(mut commands: Commands, profile: Res<PlayerProfile>) 
             ))
             .with_children(|panel| {
                 panel.spawn((
-                    Text::new("Connecting…"),
+                    Text::new("Connecting..."),
                     TextFont { font_size: 32.0, ..default() },
                     TextColor(Color::WHITE),
                 ));
                 panel.spawn((
-                    Text::new(format!("→ {}", profile.server_addr)),
+                    Text::new(format!("> {}", profile.server_addr)),
                     TextFont { font_size: 18.0, ..default() },
                     TextColor(Color::srgb(0.6, 0.6, 0.6)),
                 ));
