@@ -323,22 +323,15 @@ jobs:
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: Download all native build artefacts
+      - name: Download all build artefacts
         uses: actions/download-artifact@v4
         with:
           path: dist/
-          pattern: "client-*,server-*"
-
-      - name: Download WASM artefact
-        uses: actions/download-artifact@v4
-        with:
-          path: dist/web-dist/
-          name: web-dist
 
       - name: Zip WASM web client
         run: zip -r dist/client-web.zip dist/web-dist/
 
-      - name: List artefacts
+      - name: List artefacts (for debugging)
         run: find dist/ -type f | sort
 
       - name: Create or update rolling "latest" release
