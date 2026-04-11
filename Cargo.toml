@@ -40,7 +40,7 @@ networking = [
 #                     (printed by the server on startup). Leave unset when
 #                     using a CA-signed certificate.
 web = [
-    "bevy/webgl2",
+    "bevy/webgpu",
     "bevy/3d",
     "bevy/mouse",
     "bevy/keyboard",

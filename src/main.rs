@@ -31,7 +31,7 @@ const GIT_HASH: &str = env!("GIT_HASH");
 
 // Compile-time label for the graphics API used by this platform build.
 #[cfg(target_arch = "wasm32")]
-const RENDER_API: &str = "WebGL2";
+const RENDER_API: &str = "WebGPU";
 #[cfg(all(not(target_arch = "wasm32"), target_os = "linux"))]
 const RENDER_API: &str = "Vulkan";
 #[cfg(target_os = "windows")]
@@ -82,8 +82,7 @@ fn main() {
             ..default()
         });
 
-    // WASM: render into the <canvas id="bevy"> element; WebGL2 is selected
-    // automatically by the bevy/webgl2 feature — no RenderPlugin override needed.
+    // WASM: render into the <canvas id="bevy"> element; WebGPU is selected
     #[cfg(target_arch = "wasm32")]
     let plugins = DefaultPlugins.set(WindowPlugin {
         primary_window: Some(Window {
