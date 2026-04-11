@@ -226,7 +226,7 @@ fn spawn_connect_screen(
 
                 // ── Hint ───────────────────────────────────────────────────────
                 panel.spawn((
-                    Text::new("Click a field to type  •  Enter or click CONNECT to join"),
+                    Text::new("Click a field to type  |  Enter or click CONNECT to join"),
                     TextFont { font_size: 12.0, ..default() },
                     TextColor(Color::srgb(0.45, 0.45, 0.45)),
                     Node {
