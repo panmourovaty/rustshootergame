@@ -322,7 +322,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
-steps:
+    steps:
       - name: Create dist directory
         run: mkdir -p dist
 
