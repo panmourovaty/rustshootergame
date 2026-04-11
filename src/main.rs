@@ -10,13 +10,11 @@ use bevy::render::{
 
 mod connect_screen;
 mod game;
-mod input;
 mod map;
 mod map_loader;
 mod network;
 mod player;
 mod pvp;
-mod settings_screen;
 mod ui;
 mod weapon;
 
@@ -26,8 +24,6 @@ use map::MapPlugin;
 use map_loader::{create_map_asset_source, MapLoaderPlugin};
 use player::PlayerPlugin;
 use pvp::PvpPlugin;
-use input::InputPlugin;
-use settings_screen::SettingsScreenPlugin;
 use ui::UiPlugin;
 use weapon::WeaponPlugin;
 
@@ -116,8 +112,6 @@ fn main() {
         .add_plugins(WeaponPlugin)
         .add_plugins(PvpPlugin)
         .add_plugins(UiPlugin)
-        .add_plugins(InputPlugin)
-        .add_plugins(SettingsScreenPlugin)
         .add_plugins(network::client::ClientNetworkPlugin)
         .run();
 }

@@ -2,7 +2,6 @@ use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::prelude::*;
 use crate::game::{ConnectionError, GameState, PlayerProfile};
-use crate::settings_screen::SettingsReturnState;
 
 pub struct ConnectScreenPlugin;
 
@@ -26,9 +25,6 @@ struct ConnectScreenCamera;
 
 #[derive(Component)]
 struct ConnectButton;
-
-#[derive(Component)]
-struct ConnectSettingsButton;
 
 #[derive(Component)]
 struct ErrorText;
@@ -68,12 +64,6 @@ impl Plugin for ConnectScreenPlugin {
                 handle_connect_button,
             )
                 .run_if(in_state(GameState::ConnectScreen)),
-        );
-
-        // Settings from connect screen
-        app.add_systems(
-            Update,
-            handle_connect_settings_button.run_if(in_state(GameState::ConnectScreen)),
         );
 
         // Connecting overlay
@@ -234,33 +224,9 @@ fn spawn_connect_screen(
                         ));
                     });
 
-                // ── Settings button ──────────────────────────────────────────
-                panel
-                    .spawn((
-                        Name::new("ConnectSettingsButton"),
-                        Button,
-                        ConnectSettingsButton,
-                        Node {
-                            align_self: AlignSelf::Center,
-                            padding: UiRect::axes(Val::Px(28.0), Val::Px(10.0)),
-                            justify_content: JustifyContent::Center,
-                            align_items: AlignItems::Center,
-                            margin: UiRect::top(Val::Px(6.0)),
-                            ..default()
-                        },
-                        BackgroundColor(Color::srgb(0.15, 0.25, 0.45)),
-                    ))
-                    .with_children(|btn| {
-                        btn.spawn((
-                            Text::new("[SETTINGS]"),
-                            TextFont { font_size: 16.0, ..default() },
-                            TextColor(Color::srgb(0.7, 0.8, 1.0)),
-                        ));
-                    });
-
                 // ── Hint ───────────────────────────────────────────────────────
                 panel.spawn((
-                    Text::new("Click a field to type - Enter or click CONNECT to join"),
+                    Text::new("Click a field to type  •  Enter or click CONNECT to join"),
                     TextFont { font_size: 12.0, ..default() },
                     TextColor(Color::srgb(0.45, 0.45, 0.45)),
                     Node {
@@ -323,12 +289,12 @@ fn spawn_connecting_screen(mut commands: Commands, profile: Res<PlayerProfile>) 
             ))
             .with_children(|panel| {
                 panel.spawn((
-                    Text::new("Connecting..."),
+                    Text::new("Connecting…"),
                     TextFont { font_size: 32.0, ..default() },
                     TextColor(Color::WHITE),
                 ));
                 panel.spawn((
-                    Text::new(format!("-> {}", profile.server_addr)),
+                    Text::new(format!("→ {}", profile.server_addr)),
                     TextFont { font_size: 18.0, ..default() },
                     TextColor(Color::srgb(0.6, 0.6, 0.6)),
                 ));
@@ -492,19 +458,6 @@ fn handle_connect_button(
     conn_error.0 = None;
     **error_text = String::new();
     next_state.set(GameState::Connecting);
-}
-
-fn handle_connect_settings_button(
-    interaction_query: Query<&Interaction, (Changed<Interaction>, With<ConnectSettingsButton>)>,
-    mut commands: Commands,
-    mut next_state: ResMut<NextState<GameState>>,
-) {
-    for interaction in interaction_query.iter() {
-        if *interaction == Interaction::Pressed {
-            commands.insert_resource(SettingsReturnState(GameState::ConnectScreen));
-            next_state.set(GameState::Settings);
-        }
-    }
 }
 
 fn handle_cancel_button(

@@ -29,7 +29,6 @@ networking = [
     "lightyear/client",
     "lightyear/server",
     "lightyear/netcode",
-    "lightyear/leafwing",
 ]
 # WASM / web build: WebTransport only (no UDP, no server).
 # Build with:
@@ -52,7 +51,6 @@ web = [
     "lightyear/webtransport_self_signed",
     "lightyear/client",
     "lightyear/netcode",
-    "lightyear/leafwing",
     # Direct access to aeronet types needed for the WASM hostname-URL transport path.
     "dep:lightyear_aeronet",
     "dep:aeronet_webtransport",
@@ -66,11 +64,6 @@ bevy = { version = "0.18", default-features = false, features = [
     "keyboard",
     "default_font",
     "webp",
-    "serialize",
-] }
-leafwing-input-manager = { version = "0.20", default-features = false, features = [
-    "keyboard",
-    "mouse",
 ] }
 avian3d = { version = "0.6", default-features = false, features = [
     "3d",

@@ -16,10 +16,6 @@ pub enum GameState {
     /// Brief transitional state; immediately advances to Playing.
     Loading,
     Playing,
-    /// In-game settings screen (accessed from pause menu or during gameplay).
-    Settings,
-    /// Game is paused — shows pause menu overlay.
-    Paused,
     GameOver,
 }
 

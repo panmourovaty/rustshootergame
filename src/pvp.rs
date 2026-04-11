@@ -1,11 +1,9 @@
 use bevy::prelude::*;
 use std::collections::HashMap;
 use avian3d::prelude::*;
-use leafwing_input_manager::prelude::*;
 
 use crate::game::{GameState, KillEvent, PlayerNames, PlayerProfile, Scores};
-use crate::input::PlayerAction;
-use crate::player::{Health, LocalPlayer};
+use crate::player::Health;
 
 pub struct PvpPlugin;
 
@@ -396,13 +394,10 @@ fn spawn_scoreboard(mut commands: Commands) {
 }
 
 fn toggle_scoreboard(
-    action_state: Query<&ActionState<PlayerAction>, With<LocalPlayer>>,
+    key: Res<ButtonInput<KeyCode>>,
     mut query: Query<&mut Visibility, With<ScoreboardRoot>>,
 ) {
-    let Ok(actions) = action_state.single() else {
-        return;
-    };
-    if actions.just_pressed(&PlayerAction::Scoreboard) {
+    if key.just_pressed(KeyCode::Tab) {
         for mut vis in query.iter_mut() {
             *vis = match *vis {
                 Visibility::Hidden => Visibility::Visible,

@@ -39,7 +39,6 @@ use super::protocol::{
     GameChannel, HitMsg, JoinMsg, KillNotifyMsg, MapUrlMsg, PlayerJoinMsg, PlayerLeaveMsg,
     PosChannel, PosUpdateMsg, ProtocolPlugin, RelayedPosMsg, TakeDamageMsg, PROTOCOL_ID,
 };
-use crate::input::PlayerAction;
 
 // ─── Plugin ─────────────────────────────────────────────────────────────────
 
@@ -55,14 +54,6 @@ impl Plugin for ServerNetworkPlugin {
         });
 
         // Register messages and channels AFTER ServerPlugins.
-        // IMPORTANT: the leafwing input plugin MUST be registered before
-        // ProtocolPlugin so that the auto-assigned numeric IDs for
-        // InputChannel / InputMessage match the client side (where
-        // InputPlugin is added before ClientNetworkPlugin/ProtocolPlugin).
-        // A mismatch in registration order causes MissingMessageId errors.
-        app.add_plugins(
-            lightyear::prelude::input::leafwing::InputPlugin::<PlayerAction>::default(),
-        );
         app.add_plugins(ProtocolPlugin);
         app.add_plugins(GameServerPlugin);
 
