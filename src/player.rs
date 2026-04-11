@@ -3,8 +3,12 @@ use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 use avian3d::prelude::*;
+use leafwing_input_manager::prelude::*;
+
 use crate::game::{GameState, PlayerProfile};
+use crate::input::PlayerAction;
 use crate::map::SpawnPoints;
+use crate::settings_screen::{GameSettings, rebuild_input_map};
 use crate::weapon::Weapon;
 
 pub struct PlayerPlugin;
@@ -94,11 +98,14 @@ impl Plugin for PlayerPlugin {
         app.add_systems(OnEnter(GameState::Playing), spawn_local_player);
         // Despawn the player entity and release the cursor when returning to lobby.
         app.add_systems(OnEnter(GameState::ConnectScreen), despawn_local_player);
+        // Release the cursor and disable input when the game is paused.
+        app.add_systems(OnEnter(GameState::Paused), release_cursor_on_pause);
         app.add_systems(
             Update,
             (
                 manage_cursor,
-                fps_look.after(manage_cursor),
+                detect_pause_action.after(manage_cursor),
+                fps_look.after(detect_pause_action),
                 fps_move.after(fps_look),
                 handle_respawn,
             )
@@ -121,14 +128,24 @@ fn pick_spawn_point(spawn_points: &SpawnPoints) -> Vec3 {
 }
 
 /// Spawns the local player's physics body and attaches the camera as a child.
+/// Also attaches the Leafwing `ActionState` and `InputMap` components so that
+/// all gameplay input flows through `PlayerAction`.
 pub fn spawn_local_player(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     spawn_points: Res<SpawnPoints>,
     profile: Res<PlayerProfile>,
+    settings: Res<GameSettings>,
 ) {
     let spawn_pos = pick_spawn_point(&spawn_points);
+
+    // Build InputMap from current GameSettings (supports remapped keybinds).
+    let input_map = rebuild_input_map(&settings);
+
+    // Apply mouse sensitivity from settings.
+    let mut controller = FpsController::default();
+    controller.sensitivity = settings.mouse_sensitivity;
 
     // Gun meshes — created here, then moved into the camera child closure.
     let gun_body_mesh = meshes.add(Cuboid::new(0.04, 0.08, 0.35));
@@ -149,7 +166,9 @@ pub fn spawn_local_player(
     // ── Logical entity: physics body + FPS controller ────────────────────────
     // Collider::capsule(radius, length): radius=0.35 m, cylinder height=1.0 m
     // → total height 1.7 m.  Half-height (for ground-check ray) = 0.85 m.
-    commands
+    // Spawn the core bundle first (Bevy limits spawn tuples to ~15 elements),
+    // then insert the Leafwing InputManager components afterwards.
+    let player_entity = commands
         .spawn((
             Name::new("LocalPlayerLogical"),
             Transform::from_translation(spawn_pos),
@@ -161,12 +180,24 @@ pub fn spawn_local_player(
             Friction::new(0.0).with_combine_rule(CoefficientCombine::Min),
             Restitution::new(0.0).with_combine_rule(CoefficientCombine::Min),
             GravityScale(2.0),
-            FpsController::default(),
+            controller,
             LocalPlayer,
             Player { id: profile.client_id },
             Health::default(),
             Weapon::default(),
         ))
+        .id();
+
+    // Insert Leafwing InputManager components in a separate call to stay
+    // within Bevy's spawn-tuple limit.
+    commands.entity(player_entity).insert((
+        ActionState::<PlayerAction>::default(),
+        input_map,
+    ));
+
+    // Attach camera and weapon children.
+    commands
+        .entity(player_entity)
         .with_children(|parent| {
             // ── Camera at eye height (0.7 m above capsule centre) ──────────────
             parent
@@ -222,10 +253,13 @@ pub fn spawn_local_player(
         });
 }
 
-/// Left-click locks the cursor and enables FPS input; Escape releases it.
+/// Left-click locks the cursor and enables FPS input.
+///
+/// The Escape key is **no longer** handled here — it is bound to the
+/// `PlayerAction::Pause` action via Leafwing InputManager and triggers the
+/// `detect_pause_action` system which transitions to `GameState::Paused`.
 fn manage_cursor(
     mouse_btn: Res<ButtonInput<MouseButton>>,
-    key: Res<ButtonInput<KeyCode>>,
     mut cursor_query: Query<&mut CursorOptions>,
     mut controller_query: Query<&mut FpsController>,
 ) {
@@ -239,15 +273,43 @@ fn manage_cursor(
         for mut ctrl in controller_query.iter_mut() {
             ctrl.enable_input = true;
         }
-        return;
     }
+}
 
-    if key.just_pressed(KeyCode::Escape) {
+/// Transitions to the Paused state when the `Pause` action is pressed during
+/// gameplay.  Only fires when input is enabled (cursor is locked) so that the
+/// Escape key doesn't accidentally pause when the user hasn't clicked into
+/// the game window yet.
+fn detect_pause_action(
+    action_state: Query<&ActionState<PlayerAction>, With<LocalPlayer>>,
+    controller_query: Query<&FpsController, With<LocalPlayer>>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    let Ok(actions) = action_state.single() else {
+        return;
+    };
+    let Ok(controller) = controller_query.single() else {
+        return;
+    };
+
+    if controller.enable_input && actions.just_pressed(&PlayerAction::Pause) {
+        next_state.set(GameState::Paused);
+    }
+}
+
+/// Releases the cursor and disables gameplay input when entering the Paused
+/// state.  The pause menu (spawned by the settings-screen plugin) needs the
+/// cursor visible and free so the user can click Resume / Settings.
+fn release_cursor_on_pause(
+    mut cursor_query: Query<&mut CursorOptions>,
+    mut controller_query: Query<&mut FpsController>,
+) {
+    for mut cursor in cursor_query.iter_mut() {
         cursor.grab_mode = CursorGrabMode::None;
         cursor.visible = true;
-        for mut ctrl in controller_query.iter_mut() {
-            ctrl.enable_input = false;
-        }
+    }
+    for mut ctrl in controller_query.iter_mut() {
+        ctrl.enable_input = false;
     }
 }
 
@@ -292,17 +354,24 @@ fn fps_look(
     }
 }
 
-/// WASD to move, Space to jump.  Uses avian3d physics for collision response.
+/// Reads movement from the Leafwing `ActionState<PlayerAction>` and applies
+/// physics forces via avian3d.  Uses `PlayerAction::MoveForward/Back/Left/Right`
+/// for horizontal movement and `PlayerAction::Jump` for jumping.
 fn fps_move(
     time: Res<Time>,
-    key: Res<ButtonInput<KeyCode>>,
     mut player_query: Query<
-        (Entity, &FpsController, &Transform, &mut LinearVelocity),
+        (
+            Entity,
+            &FpsController,
+            &Transform,
+            &mut LinearVelocity,
+            &ActionState<PlayerAction>,
+        ),
         With<LocalPlayer>,
     >,
     spatial_query: SpatialQuery,
 ) {
-    let Ok((entity, ctrl, body_tf, mut vel)) = player_query.single_mut() else {
+    let Ok((entity, ctrl, body_tf, mut vel, actions)) = player_query.single_mut() else {
         return;
     };
     if !ctrl.enable_input {
@@ -312,9 +381,6 @@ fn fps_move(
     let dt = time.delta_secs();
 
     // ── Ground check ─────────────────────────────────────────────────────────
-    // Cast a short ray downward from the capsule centre.
-    // Capsule half-height (radius + cylinder/2) = 0.35 + 0.5 = 0.85 m.
-    // Adding 0.1 m tolerance → max_distance = 0.95 m.
     let ground_filter = SpatialQueryFilter {
         excluded_entities: [entity].into_iter().collect(),
         ..default()
@@ -323,18 +389,18 @@ fn fps_move(
         .cast_ray(body_tf.translation, Dir3::NEG_Y, 0.95, true, &ground_filter)
         .is_some();
 
-    // ── Build wish-direction from WASD (local space, then rotated by yaw) ────
+    // ── Build wish-direction from Leafwing actions (local space) ─────────────
     let mut wish_dir = Vec3::ZERO;
-    if key.pressed(KeyCode::KeyW) {
+    if actions.pressed(&PlayerAction::MoveForward) {
         wish_dir.z -= 1.0;
     }
-    if key.pressed(KeyCode::KeyS) {
+    if actions.pressed(&PlayerAction::MoveBack) {
         wish_dir.z += 1.0;
     }
-    if key.pressed(KeyCode::KeyA) {
+    if actions.pressed(&PlayerAction::MoveLeft) {
         wish_dir.x -= 1.0;
     }
-    if key.pressed(KeyCode::KeyD) {
+    if actions.pressed(&PlayerAction::MoveRight) {
         wish_dir.x += 1.0;
     }
 
@@ -351,7 +417,7 @@ fn fps_move(
     let new_xz = current_xz.lerp(target_xz, (accel * dt).min(1.0));
 
     // ── Jump ──────────────────────────────────────────────────────────────────
-    let new_y = if is_grounded && key.just_pressed(KeyCode::Space) {
+    let new_y = if is_grounded && actions.just_pressed(&PlayerAction::Jump) {
         ctrl.jump_force
     } else {
         vel.y

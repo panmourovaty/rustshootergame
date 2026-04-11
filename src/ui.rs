@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use crate::game::{GameState, KillEvent, PlayerNames, Scores};
 use crate::player::{Health, LocalPlayer};
+use crate::settings_screen::SettingsReturnState;
 use crate::weapon::Weapon;
 
 // ─── Game-over timer resource ────────────────────────────────────────────────
@@ -18,6 +19,9 @@ struct HealthText;
 
 #[derive(Component)]
 struct AmmoText;
+
+#[derive(Component)]
+struct SettingsButton;
 
 #[derive(Component)]
 struct KillFeedRoot;
@@ -56,6 +60,7 @@ impl Plugin for UiPlugin {
                 update_reloading_text,
                 update_kill_feed,
                 append_kill_feed_entries,
+                handle_settings_button,
             )
                 .run_if(in_state(GameState::Playing)),
         );
@@ -88,6 +93,7 @@ fn spawn_hud(mut commands: Commands) {
             spawn_ammo_display(root);
             spawn_kill_feed(root);
             spawn_reloading_text(root);
+            spawn_settings_button(root);
         });
 }
 
@@ -207,7 +213,7 @@ fn spawn_ammo_display(parent: &mut ChildSpawnerCommands) {
 fn spawn_reloading_text(parent: &mut ChildSpawnerCommands) {
     parent.spawn((
         Name::new("ReloadingText"),
-        Text::new("RELOADING…"),
+        Text::new("RELOADING..."),
         TextFont {
             font_size: 20.0,
             ..default()
@@ -221,6 +227,49 @@ fn spawn_reloading_text(parent: &mut ChildSpawnerCommands) {
         },
         ReloadingText,
     ));
+}
+
+// ── Settings gear button (top-left) ──────────────────────────────────────────
+
+fn spawn_settings_button(parent: &mut ChildSpawnerCommands) {
+    parent
+        .spawn((
+            Name::new("SettingsButton"),
+            Button,
+            SettingsButton,
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(10.0),
+                left: Val::Px(10.0),
+                padding: UiRect::axes(Val::Px(8.0), Val::Px(4.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.4)),
+        ))
+        .with_children(|btn| {
+            btn.spawn((
+                Text::new("[+]"),
+                TextFont {
+                    font_size: 20.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.7, 0.7, 0.7)),
+            ));
+        });
+}
+
+/// Opens the settings screen from the in-game HUD.
+fn handle_settings_button(
+    interaction_query: Query<&Interaction, (Changed<Interaction>, With<SettingsButton>)>,
+    mut commands: Commands,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    for interaction in interaction_query.iter() {
+        if *interaction == Interaction::Pressed {
+            commands.insert_resource(SettingsReturnState(GameState::Playing));
+            next_state.set(GameState::Paused);
+        }
+    }
 }
 
 // ── Kill feed (top-right) ─────────────────────────────────────────────────────

@@ -1,8 +1,11 @@
 use bevy::prelude::*;
 use bevy::window::CursorOptions;
 use avian3d::prelude::*;
+use leafwing_input_manager::prelude::*;
+
 use crate::player::{Health, LocalPlayer, Player, PlayerCamera};
 use crate::game::KillEvent;
+use crate::input::PlayerAction;
 use crate::pvp::RemotePlayer;
 
 pub struct WeaponPlugin;
@@ -97,17 +100,22 @@ impl Plugin for WeaponPlugin {
 
 // ─── Systems ────────────────────────────────────────────────────────────────
 
-/// R key starts reload when magazine is not full and not already reloading.
+/// `PlayerAction::Reload` starts reload when magazine is not full and not
+/// already reloading.  Reads the Leafwing `ActionState` instead of raw
+/// `ButtonInput<KeyCode>` so keybinds can be remapped at runtime.
 fn handle_reload(
     time: Res<Time>,
-    key: Res<ButtonInput<KeyCode>>,
+    action_state: Query<&ActionState<PlayerAction>, With<LocalPlayer>>,
     mut query: Query<&mut Weapon, With<LocalPlayer>>,
 ) {
+    let Ok(actions) = action_state.single() else {
+        return;
+    };
     let Ok(mut weapon) = query.single_mut() else {
         return;
     };
 
-    if key.just_pressed(KeyCode::KeyR)
+    if actions.just_pressed(&PlayerAction::Reload)
         && !weapon.is_reloading
         && weapon.ammo < weapon.max_ammo
     {
@@ -127,10 +135,13 @@ fn handle_reload(
     }
 }
 
-/// Reads mouse input and emits `ShootEvent` when all conditions are met.
+/// Reads the `PlayerAction::Shoot` action from the Leafwing `ActionState` and
+/// emits `ShootEvent` when all conditions are met.  This replaces the raw
+/// `MouseButton::Left` check so that the shoot keybind can be remapped at
+/// runtime through the settings screen.
 fn handle_shooting(
     time: Res<Time>,
-    mouse_btn: Res<ButtonInput<MouseButton>>,
+    action_state: Query<&ActionState<PlayerAction>, With<LocalPlayer>>,
     cursor_query: Query<&CursorOptions>,
     camera_query: Query<&GlobalTransform, With<PlayerCamera>>,
     mut weapon_query: Query<(Entity, &mut Weapon), With<LocalPlayer>>,
@@ -144,6 +155,10 @@ fn handle_shooting(
         return;
     }
 
+    let Ok(actions) = action_state.single() else {
+        return;
+    };
+
     let Ok((shooter_entity, mut weapon)) = weapon_query.single_mut() else {
         return;
     };
@@ -154,7 +169,7 @@ fn handle_shooting(
 
     let elapsed = time.elapsed_secs();
 
-    if mouse_btn.pressed(MouseButton::Left)
+    if actions.pressed(&PlayerAction::Shoot)
         && weapon.ammo > 0
         && (elapsed - weapon.last_fire_time) >= weapon.fire_rate
     {
@@ -171,7 +186,7 @@ fn handle_shooting(
         }
 
         if weapon.ammo == 0 {
-            info!("Magazine empty — press R to reload.");
+            info!("Magazine empty — press the reload key to reload.");
         }
     }
 }
@@ -203,7 +218,6 @@ fn process_shoot_events(
             true,
             &filter,
         ) {
-            // In avian3d 0.5, the field is `distance` (not `time_of_impact`).
             let hit_point = event.origin + *event.direction * hit.distance;
 
             // Check if the hit entity is a remote player.
@@ -217,8 +231,6 @@ fn process_shoot_events(
                     remote_player.client_id, event.damage
                 );
             } else if health_query.get(hit.entity).is_ok() {
-                // Local entity with health (e.g. local player if they could
-                // somehow shoot themselves — kept for future use).
                 hit_events.write(HitEvent {
                     shooter_entity: event.shooter,
                     target: hit.entity,
