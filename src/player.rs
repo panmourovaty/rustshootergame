@@ -151,6 +151,7 @@ pub fn spawn_local_player(
         .spawn((
             Name::new("LocalPlayerLogical"),
             Transform::from_translation(spawn_pos),
+            Visibility::default(),
             RigidBody::Dynamic,
             Collider::capsule(0.35, 1.0),
             LockedAxes::ROTATION_LOCKED,
