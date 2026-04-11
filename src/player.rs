@@ -92,6 +92,8 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         // Spawn after the map and spawn points are ready, once gameplay begins.
         app.add_systems(OnEnter(GameState::Playing), spawn_local_player);
+        // Despawn the player entity and release the cursor when returning to lobby.
+        app.add_systems(OnEnter(GameState::ConnectScreen), despawn_local_player);
         app.add_systems(
             Update,
             (
@@ -371,5 +373,25 @@ fn handle_respawn(
             *velocity = LinearVelocity::default();
             info!("Player respawned at {:?}.", respawn);
         }
+    }
+}
+
+/// Despawns the local player entity (and its camera children) and releases
+/// the cursor when returning to the connect screen, so the mouse is usable
+/// in the lobby UI.
+fn despawn_local_player(
+    mut commands: Commands,
+    mut cursor_query: Query<&mut CursorOptions>,
+    player_query: Query<Entity, With<LocalPlayer>>,
+) {
+    // Release the cursor first so it's visible and free for UI interaction.
+    for mut cursor in cursor_query.iter_mut() {
+        cursor.grab_mode = CursorGrabMode::None;
+        cursor.visible = true;
+    }
+
+    // Despawn the local player entity (and its camera children).
+    for entity in player_query.iter() {
+        commands.entity(entity).despawn();
     }
 }

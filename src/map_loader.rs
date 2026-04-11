@@ -83,6 +83,8 @@ impl Plugin for MapLoaderPlugin {
                 apply_skybox,
             ),
         );
+        // Clean up map entities and resources when returning to lobby.
+        app.add_systems(OnEnter(GameState::ConnectScreen), cleanup_map);
     }
 }
 
@@ -532,6 +534,28 @@ fn apply_skybox(
     });
     commands.remove_resource::<PendingSkybox>();
     info!("[MAP] Skybox attached to camera");
+}
+
+/// Despawns all map-related entities and removes leftover resources so the
+/// next session starts from a clean state.  Runs when entering ConnectScreen
+/// (e.g. after game over).
+fn cleanup_map(
+    mut commands: Commands,
+    dynamic_query: Query<Entity, With<DynamicMap>>,
+    overlay_query: Query<Entity, With<MapLoadingOverlay>>,
+) {
+    for entity in dynamic_query.iter() {
+        commands.entity(entity).despawn();
+    }
+    for entity in overlay_query.iter() {
+        commands.entity(entity).despawn();
+    }
+    commands.remove_resource::<PendingMapCollider>();
+    commands.remove_resource::<PendingDownload>();
+    commands.remove_resource::<PendingSkybox>();
+    commands.remove_resource::<LoadingMapHandles>();
+    commands.remove_resource::<WaitingForMapTimeout>();
+    info!("[MAP] Map entities and resources cleaned up.");
 }
 
 fn pick_spawn_point(spawn_points: &SpawnPoints) -> Vec3 {

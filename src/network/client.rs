@@ -75,6 +75,9 @@ impl Plugin for ClientNetworkPlugin {
         #[cfg(target_arch = "wasm32")]
         app.add_observer(wt_hostname_link);
 
+        // Disconnect the network client when returning to the lobby.
+        app.add_systems(OnEnter(GameState::ConnectScreen), disconnect_client);
+
         // Playing-state systems.
         app.add_systems(OnEnter(GameState::Playing), send_join_msg);
         app.add_systems(
@@ -237,6 +240,19 @@ fn cleanup_pending_client(
         }
     }
     commands.remove_resource::<ConnectTimeout>();
+}
+
+/// Despawns the connected lightyear client entity when returning to the
+/// connect screen (e.g. after game over), so the network session is fully
+/// torn down and the next connection starts from a clean state.
+fn disconnect_client(
+    mut commands: Commands,
+    client_query: Query<Entity, With<Client>>,
+) {
+    for entity in client_query.iter() {
+        commands.entity(entity).despawn();
+        info!("Disconnected from server, client entity despawned.");
+    }
 }
 
 // ─── WASM-only: hostname WebTransport support ────────────────────────────────

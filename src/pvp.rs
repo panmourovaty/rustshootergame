@@ -309,24 +309,21 @@ fn apply_local_damage(
 
 fn handle_remote_kill(
     mut remote_kill_events: MessageReader<RemoteKillEvent>,
-    mut scores: ResMut<Scores>,
     mut kill_events: MessageWriter<KillEvent>,
 ) {
     for ev in remote_kill_events.read() {
-        scores.add_kill(ev.killer_id);
-        scores.add_death(ev.victim_id);
-
-        // Reuse the existing KillEvent so the kill feed picks it up.
+        // Convert the server-confirmed kill into a local KillEvent.
+        // Score updates are handled by `record_kills` — the single source
+        // of truth for score mutations — so we only write the event here.
         kill_events.write(KillEvent {
             killer_id: ev.killer_id,
             victim_id: ev.victim_id,
         });
 
         info!(
-            "Remote kill confirmed: {} killed {} ({} kills total)",
+            "Remote kill confirmed: {} killed {}",
             ev.killer_id,
             ev.victim_id,
-            scores.get_kills(ev.killer_id)
         );
     }
 }
