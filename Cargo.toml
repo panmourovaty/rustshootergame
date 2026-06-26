@@ -76,6 +76,7 @@ bevy = { version = "0.19", default-features = false, features = [
     "3d_bevy_render",
     "ui_bevy_render",
     "bevy_ui_widgets",
+    "ui_picking",
     "scene",
     "mouse",
     "keyboard",
