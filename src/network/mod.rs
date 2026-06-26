@@ -1,6 +1,6 @@
 /// Network subsystem.
 ///
-/// Uses lightyear 0.26 (Bevy 0.18 compatible).
+/// Uses lightyear 0.28 (Bevy 0.19 compatible).
 ///
 /// Feature gates:
 ///   `networking`  - native builds: UDP + WebTransport client + server
@@ -17,10 +17,7 @@ pub mod server;
 // Client exists for native (non-server) and WASM builds.
 // Excluded when building with `--features server` so that the server binary
 // doesn't need to compile client-side game modules (pvp, weapon, etc.).
-#[cfg(any(
-    all(feature = "networking", not(feature = "server")),
-    feature = "web"
-))]
+#[cfg(any(all(feature = "networking", not(feature = "server")), feature = "web"))]
 pub mod client;
 
 // ── Stubs when all networking is disabled ────────────────────────────────────

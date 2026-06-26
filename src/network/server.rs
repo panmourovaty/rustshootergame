@@ -1,4 +1,4 @@
-/// Dedicated-server network plugin - lightyear 0.26 entity-based API.
+/// Dedicated-server network plugin - lightyear 0.28 entity-based API.
 ///
 /// Listens on two transports simultaneously:
 ///   UDP           - native clients (port `--port`, default 7777)
@@ -7,7 +7,6 @@
 /// A self-signed TLS certificate is generated at startup for WebTransport.
 /// The SHA-256 fingerprint is printed so operators can bake it into the WASM
 /// build via the `RSG_CERT_DIGEST` compile-time environment variable.
-
 use bevy::prelude::*;
 use lightyear::prelude::server::*;
 use lightyear::prelude::{Connected, LocalAddr};
@@ -80,14 +79,7 @@ pub struct GameServerPlugin;
 
 impl Plugin for GameServerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (
-                handle_join_msg,
-                relay_positions,
-                handle_hit_msg,
-            ),
-        );
+        app.add_systems(Update, (handle_join_msg, relay_positions, handle_hit_msg));
 
         // Observer for disconnections.
         app.add_observer(handle_disconnect);
@@ -152,12 +144,14 @@ fn spawn_server_entities(
     // can connect.  On Linux, IPV6_V6ONLY defaults to 0, meaning [::]:port
     // also accepts IPv4 connections (shown as ::ffff:1.2.3.4).
     let udp_addr = SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), ports.udp);
-    let udp_entity = commands.spawn((
-        Name::new("GameServerUdp"),
-        ServerUdpIo::default(),
-        LocalAddr(udp_addr),
-        NetcodeServer::new(netcode_config.clone()),
-    )).id();
+    let udp_entity = commands
+        .spawn((
+            Name::new("GameServerUdp"),
+            ServerUdpIo::default(),
+            LocalAddr(udp_addr),
+            NetcodeServer::new(netcode_config.clone()),
+        ))
+        .id();
     commands.trigger(Start { entity: udp_entity });
     info!("UDP listener on {}", udp_addr);
 
@@ -179,18 +173,23 @@ fn spawn_server_entities(
             info!("→ Self-signed certificate expires in 14 days; rebuild WASM and restart the server before then.");
         }
         None => {
-            info!("WebTransport listener on {} | using CA-signed certificate", wt_addr);
+            info!(
+                "WebTransport listener on {} | using CA-signed certificate",
+                wt_addr
+            );
         }
     }
 
-    let wt_entity = commands.spawn((
-        Name::new("GameServerWebTransport"),
-        WebTransportServerIo {
-            certificate: cert.identity.clone_identity(),
-        },
-        LocalAddr(wt_addr),
-        NetcodeServer::new(netcode_config),
-    )).id();
+    let wt_entity = commands
+        .spawn((
+            Name::new("GameServerWebTransport"),
+            WebTransportServerIo {
+                certificate: cert.identity.clone_identity(),
+            },
+            LocalAddr(wt_addr),
+            NetcodeServer::new(netcode_config),
+        ))
+        .id();
     commands.trigger(Start { entity: wt_entity });
 }
 
@@ -259,7 +258,10 @@ fn handle_join_msg(
             sender.send::<GameChannel>(announce.clone());
             broadcast_count += 1;
         }
-        warn!("[SERVER] Broadcast PlayerJoinMsg for id={} to {} senders", join_msg.client_id, broadcast_count);
+        warn!(
+            "[SERVER] Broadcast PlayerJoinMsg for id={} to {} senders",
+            join_msg.client_id, broadcast_count
+        );
 
         // Send each pre-existing player's info to the newcomer so their
         // lobby/scoreboard is populated immediately.
@@ -275,7 +277,10 @@ fn handle_join_msg(
             // The newcomer's sender is in announce_senders; send only to them.
             if let Ok(mut sender) = announce_senders.get_mut(_new_entity) {
                 sender.send::<GameChannel>(existing_msg);
-                warn!("[SERVER] Sent existing player id={} info to newcomer id={}", existing_id, join_msg.client_id);
+                warn!(
+                    "[SERVER] Sent existing player id={} info to newcomer id={}",
+                    existing_id, join_msg.client_id
+                );
             }
         }
 
@@ -284,7 +289,10 @@ fn handle_join_msg(
         if let Some(url) = &map_url.0 {
             if let Ok(mut sender) = map_url_senders.get_mut(_new_entity) {
                 sender.send::<GameChannel>(MapUrlMsg { url: url.clone() });
-                info!("[SERVER] Sent MapUrlMsg to id={}: {}", join_msg.client_id, url);
+                info!(
+                    "[SERVER] Sent MapUrlMsg to id={}: {}",
+                    join_msg.client_id, url
+                );
             }
         }
     }
@@ -305,7 +313,8 @@ fn handle_disconnect(
 
     bevy::log::info!(
         "Player '{}' (id={}) disconnected",
-        player_info.username, player_info.client_id
+        player_info.username,
+        player_info.client_id
     );
 
     let leave_msg = PlayerLeaveMsg {
@@ -319,10 +328,7 @@ fn handle_disconnect(
 
 /// Reads position updates from each client and relays them to all other clients.
 fn relay_positions(
-    mut readers: Query<
-        (&ServerPlayerInfo, &mut MessageReceiver<PosUpdateMsg>),
-        With<ClientOf>,
-    >,
+    mut readers: Query<(&ServerPlayerInfo, &mut MessageReceiver<PosUpdateMsg>), With<ClientOf>>,
     mut senders: Query<&mut MessageSender<RelayedPosMsg>, With<ClientOf>>,
 ) {
     // Collect all incoming position updates.
@@ -356,7 +362,11 @@ fn relay_positions(
 fn handle_hit_msg(
     mut hit_rx_query: Query<&mut MessageReceiver<HitMsg>, With<ClientOf>>,
     mut victim_query: Query<
-        (Entity, &mut ServerPlayerInfo, &mut MessageSender<TakeDamageMsg>),
+        (
+            Entity,
+            &mut ServerPlayerInfo,
+            &mut MessageSender<TakeDamageMsg>,
+        ),
         With<ClientOf>,
     >,
     mut kill_senders: Query<&mut MessageSender<KillNotifyMsg>, With<ClientOf>>,
@@ -389,7 +399,10 @@ fn handle_hit_msg(
 
             bevy::log::info!(
                 "Player {} hit player {} for {:.0} dmg → {:.0} HP",
-                hit.killer_id, hit.victim_id, hit.damage, new_hp
+                hit.killer_id,
+                hit.victim_id,
+                hit.damage,
+                new_hp
             );
 
             if new_hp <= 0.0 {
@@ -407,7 +420,8 @@ fn handle_hit_msg(
 
                 bevy::log::info!(
                     "Kill! Player {} killed player {}.",
-                    hit.killer_id, hit.victim_id
+                    hit.killer_id,
+                    hit.victim_id
                 );
             }
         }

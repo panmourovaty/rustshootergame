@@ -1,6 +1,6 @@
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use std::collections::HashMap;
-use avian3d::prelude::*;
 
 use crate::game::{GameState, KillEvent, PlayerNames, PlayerProfile, Scores};
 use crate::player::Health;
@@ -108,7 +108,10 @@ impl Plugin for PvpPlugin {
         app.add_message::<LocalPlayerDamaged>();
         app.add_message::<RemoteKillEvent>();
 
-        app.add_systems(OnEnter(GameState::Playing), (spawn_scoreboard, register_local_player));
+        app.add_systems(
+            OnEnter(GameState::Playing),
+            (spawn_scoreboard, register_local_player),
+        );
         app.add_systems(OnEnter(GameState::ConnectScreen), cleanup_on_disconnect);
 
         app.add_systems(
@@ -153,7 +156,10 @@ fn spawn_remote_player(
         }
         // Don't double-spawn if we already have this player tracked.
         if remote_players.by_id.contains_key(&ev.client_id) {
-            warn!("[PVP] Already tracking id={}, skipping duplicate spawn", ev.client_id);
+            warn!(
+                "[PVP] Already tracking id={}, skipping duplicate spawn",
+                ev.client_id
+            );
             continue;
         }
 
@@ -166,13 +172,13 @@ fn spawn_remote_player(
 
         // Weapon meshes - same appearance as the local player's gun.
         let gun_body_mesh = meshes.add(Cuboid::new(0.04, 0.08, 0.35));
-        let gun_material  = materials.add(StandardMaterial {
+        let gun_material = materials.add(StandardMaterial {
             base_color: Color::srgb(0.12, 0.12, 0.12),
             perceptual_roughness: 0.9,
             metallic: 0.6,
             ..default()
         });
-        let barrel_mesh     = meshes.add(Cuboid::new(0.02, 0.02, 0.20));
+        let barrel_mesh = meshes.add(Cuboid::new(0.02, 0.02, 0.20));
         let barrel_material = materials.add(StandardMaterial {
             base_color: Color::srgb(0.08, 0.08, 0.08),
             metallic: 0.8,
@@ -183,50 +189,56 @@ fn spawn_remote_player(
         // Gun positions are in local space relative to the capsule centre.
         // X=0.45 keeps the mesh clear of the capsule radius (0.35 m).
         // Y=0.40 ≈ shoulder/arm height.  Z=-0.35/-0.58 points the barrel forward.
-        let entity = commands.spawn((
-            Name::new(format!("RemotePlayer_{}", ev.client_id)),
-            Mesh3d(meshes.add(Capsule3d {
-                radius: 0.35,
-                half_length: 0.5,
-            })),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: color,
-                perceptual_roughness: 0.6,
-                metallic: 0.1,
-                ..default()
-            })),
-            Transform::from_translation(spawn_pos).with_rotation(spawn_rot),
-            RigidBody::Kinematic,
-            Collider::capsule(0.35, 1.0),
-            RemotePlayer { client_id: ev.client_id },
-            RemotePlayerInterp {
-                from_pos: spawn_pos,
-                to_pos: spawn_pos,
-                from_rot: spawn_rot,
-                to_rot: spawn_rot,
-                elapsed: INTERP_DURATION, // already "done" - no movement until first update
-            },
-        ))
-        .with_children(|parent| {
-            parent.spawn((
-                Name::new("RemoteGunBody"),
-                Mesh3d(gun_body_mesh),
-                MeshMaterial3d(gun_material),
-                Transform::from_xyz(0.45, 0.40, -0.35),
-            ));
-            parent.spawn((
-                Name::new("RemoteGunBarrel"),
-                Mesh3d(barrel_mesh),
-                MeshMaterial3d(barrel_material),
-                Transform::from_xyz(0.45, 0.43, -0.58),
-            ));
-        })
-        .id();
+        let entity = commands
+            .spawn((
+                Name::new(format!("RemotePlayer_{}", ev.client_id)),
+                Mesh3d(meshes.add(Capsule3d {
+                    radius: 0.35,
+                    half_length: 0.5,
+                })),
+                MeshMaterial3d(materials.add(StandardMaterial {
+                    base_color: color,
+                    perceptual_roughness: 0.6,
+                    metallic: 0.1,
+                    ..default()
+                })),
+                Transform::from_translation(spawn_pos).with_rotation(spawn_rot),
+                RigidBody::Kinematic,
+                Collider::capsule(0.35, 1.0),
+                RemotePlayer {
+                    client_id: ev.client_id,
+                },
+                RemotePlayerInterp {
+                    from_pos: spawn_pos,
+                    to_pos: spawn_pos,
+                    from_rot: spawn_rot,
+                    to_rot: spawn_rot,
+                    elapsed: INTERP_DURATION, // already "done" - no movement until first update
+                },
+            ))
+            .with_children(|parent| {
+                parent.spawn((
+                    Name::new("RemoteGunBody"),
+                    Mesh3d(gun_body_mesh),
+                    MeshMaterial3d(gun_material),
+                    Transform::from_xyz(0.45, 0.40, -0.35),
+                ));
+                parent.spawn((
+                    Name::new("RemoteGunBarrel"),
+                    Mesh3d(barrel_mesh),
+                    MeshMaterial3d(barrel_material),
+                    Transform::from_xyz(0.45, 0.43, -0.58),
+                ));
+            })
+            .id();
 
-        remote_players.by_id.insert(ev.client_id, RemotePlayerData {
-            entity,
-            username: ev.username.clone(),
-        });
+        remote_players.by_id.insert(
+            ev.client_id,
+            RemotePlayerData {
+                entity,
+                username: ev.username.clone(),
+            },
+        );
 
         // Register name so the kill feed can display it.
         player_names.0.insert(ev.client_id, ev.username.clone());
@@ -260,11 +272,17 @@ fn receive_remote_player_pos(
 ) {
     for ev in events.read() {
         let Some(data) = remote_players.by_id.get(&ev.client_id) else {
-            warn!("[PVP] receive_remote_player_pos: no tracked entity for id={}", ev.client_id);
+            warn!(
+                "[PVP] receive_remote_player_pos: no tracked entity for id={}",
+                ev.client_id
+            );
             continue;
         };
         let Ok((tf, mut interp)) = interp_query.get_mut(data.entity) else {
-            warn!("[PVP] receive_remote_player_pos: entity {:?} for id={} missing components", data.entity, ev.client_id);
+            warn!(
+                "[PVP] receive_remote_player_pos: entity {:?} for id={} missing components",
+                data.entity, ev.client_id
+            );
             continue;
         };
         // Start a new interpolation segment from the current visual position
@@ -272,9 +290,9 @@ fn receive_remote_player_pos(
         // still in progress when this update arrived.
         interp.from_pos = tf.translation;
         interp.from_rot = tf.rotation;
-        interp.to_pos   = ev.pos;
-        interp.to_rot   = Quat::from_rotation_y(ev.yaw);
-        interp.elapsed  = 0.0;
+        interp.to_pos = ev.pos;
+        interp.to_rot = Quat::from_rotation_y(ev.yaw);
+        interp.elapsed = 0.0;
     }
 }
 
@@ -289,7 +307,7 @@ fn interpolate_remote_players(
         interp.elapsed += dt;
         let t = (interp.elapsed / INTERP_DURATION).min(1.0);
         tf.translation = interp.from_pos.lerp(interp.to_pos, t);
-        tf.rotation    = interp.from_rot.slerp(interp.to_rot, t);
+        tf.rotation = interp.from_rot.slerp(interp.to_rot, t);
     }
 }
 
@@ -322,8 +340,7 @@ fn handle_remote_kill(
 
         info!(
             "Remote kill confirmed: {} killed {}",
-            ev.killer_id,
-            ev.victim_id,
+            ev.killer_id, ev.victim_id,
         );
     }
 }
@@ -331,11 +348,10 @@ fn handle_remote_kill(
 /// Called on OnEnter(Playing): record the local player's own name so the
 /// scoreboard can display it (the server doesn't send us our own PlayerJoinMsg
 /// in a way that would reach spawn_remote_player after the self-filter).
-fn register_local_player(
-    profile: Res<PlayerProfile>,
-    mut player_names: ResMut<PlayerNames>,
-) {
-    player_names.0.insert(profile.client_id, profile.username.clone());
+fn register_local_player(profile: Res<PlayerProfile>, mut player_names: ResMut<PlayerNames>) {
+    player_names
+        .0
+        .insert(profile.client_id, profile.username.clone());
 }
 
 // ─── Scoreboard ──────────────────────────────────────────────────────────────
@@ -364,7 +380,7 @@ fn spawn_scoreboard(mut commands: Commands) {
                 Name::new("ScoreboardTitle"),
                 Text::new("SCOREBOARD"),
                 TextFont {
-                    font_size: 26.0,
+                    font_size: FontSize::Px(26.0),
                     ..default()
                 },
                 TextColor(Color::WHITE),
@@ -374,7 +390,7 @@ fn spawn_scoreboard(mut commands: Commands) {
                 Name::new("ScoreboardHeader"),
                 Text::new("Name                    K    D"),
                 TextFont {
-                    font_size: 18.0,
+                    font_size: FontSize::Px(18.0),
                     ..default()
                 },
                 TextColor(Color::srgb(0.8, 0.8, 0.5)),
@@ -384,7 +400,7 @@ fn spawn_scoreboard(mut commands: Commands) {
                 Name::new("ScoreboardText"),
                 Text::new(""),
                 TextFont {
-                    font_size: 18.0,
+                    font_size: FontSize::Px(18.0),
                     ..default()
                 },
                 TextColor(Color::srgb(0.9, 0.9, 0.9)),
@@ -415,9 +431,7 @@ fn update_scoreboard(
     remote_players: Res<RemotePlayers>,
 ) {
     // Only rebuild when visible.
-    let is_visible = board_query
-        .iter()
-        .any(|v| !matches!(v, Visibility::Hidden));
+    let is_visible = board_query.iter().any(|v| !matches!(v, Visibility::Hidden));
     if !is_visible {
         return;
     }
@@ -427,7 +441,10 @@ fn update_scoreboard(
     };
 
     // Collect all known player IDs from scores and remote players.
-    let mut all_ids: Vec<u64> = scores.kills.keys().copied()
+    let mut all_ids: Vec<u64> = scores
+        .kills
+        .keys()
+        .copied()
         .chain(scores.deaths.keys().copied())
         .chain(remote_players.by_id.keys().copied())
         .collect();
@@ -435,13 +452,12 @@ fn update_scoreboard(
     all_ids.dedup();
 
     // Sort by kills descending.
-    all_ids.sort_by(|a, b| {
-        scores.get_kills(*b).cmp(&scores.get_kills(*a))
-    });
+    all_ids.sort_by(|a, b| scores.get_kills(*b).cmp(&scores.get_kills(*a)));
 
     let mut lines = String::new();
     for id in all_ids {
-        let name = player_names.0
+        let name = player_names
+            .0
             .get(&id)
             .cloned()
             .unwrap_or_else(|| format!("Player {}", id & 0xFFFF));

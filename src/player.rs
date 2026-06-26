@@ -1,11 +1,11 @@
-use bevy::camera::{Camera3dDepthLoadOp, visibility::RenderLayers};
-use bevy::input::mouse::MouseMotion;
-use bevy::prelude::*;
-use bevy::window::{CursorGrabMode, CursorOptions};
-use avian3d::prelude::*;
 use crate::game::{GameState, PlayerProfile};
 use crate::map::SpawnPoints;
 use crate::weapon::Weapon;
+use avian3d::prelude::*;
+use bevy::camera::{visibility::RenderLayers, Camera3dDepthLoadOp};
+use bevy::input::mouse::MouseMotion;
+use bevy::prelude::*;
+use bevy::window::{CursorGrabMode, CursorOptions};
 
 pub struct PlayerPlugin;
 
@@ -46,7 +46,7 @@ impl Default for Health {
 #[derive(Component)]
 pub struct PlayerCamera;
 
-/// Simple FPS controller - replaces bevy_fps_controller for Bevy 0.18 compat.
+/// Simple FPS controller - replaces bevy_fps_controller for Bevy 0.19 compat.
 /// Lives on the logical (physics) player entity.
 #[derive(Component)]
 pub struct FpsController {
@@ -163,7 +163,9 @@ pub fn spawn_local_player(
             GravityScale(2.0),
             FpsController::default(),
             LocalPlayer,
-            Player { id: profile.client_id },
+            Player {
+                id: profile.client_id,
+            },
             Health::default(),
             Weapon::default(),
         ))
@@ -277,11 +279,10 @@ fn fps_look(
     }
 
     controller.yaw -= delta.x * controller.sensitivity;
-    controller.pitch = (controller.pitch - delta.y * controller.sensitivity)
-        .clamp(
-            -std::f32::consts::FRAC_PI_2 + 0.01,
-            std::f32::consts::FRAC_PI_2 - 0.01,
-        );
+    controller.pitch = (controller.pitch - delta.y * controller.sensitivity).clamp(
+        -std::f32::consts::FRAC_PI_2 + 0.01,
+        std::f32::consts::FRAC_PI_2 - 0.01,
+    );
 
     // Yaw → rotate the physics body around Y.
     body_tf.rotation = Quat::from_rotation_y(controller.yaw);
@@ -343,8 +344,16 @@ fn fps_move(
     }
 
     // ── Apply horizontal acceleration ─────────────────────────────────────────
-    let target_speed = if is_grounded { ctrl.speed } else { ctrl.max_air_speed };
-    let accel = if is_grounded { ctrl.acceleration } else { ctrl.air_acceleration };
+    let target_speed = if is_grounded {
+        ctrl.speed
+    } else {
+        ctrl.max_air_speed
+    };
+    let accel = if is_grounded {
+        ctrl.acceleration
+    } else {
+        ctrl.air_acceleration
+    };
 
     let current_xz = Vec3::new(vel.x, 0.0, vel.z);
     let target_xz = wish_dir * target_speed;

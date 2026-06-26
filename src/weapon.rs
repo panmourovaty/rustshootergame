@@ -1,9 +1,9 @@
+use crate::game::KillEvent;
+use crate::player::{Health, LocalPlayer, Player, PlayerCamera};
+use crate::pvp::RemotePlayer;
+use avian3d::prelude::*;
 use bevy::prelude::*;
 use bevy::window::CursorOptions;
-use avian3d::prelude::*;
-use crate::player::{Health, LocalPlayer, Player, PlayerCamera};
-use crate::game::KillEvent;
-use crate::pvp::RemotePlayer;
 
 pub struct WeaponPlugin;
 
@@ -107,10 +107,7 @@ fn handle_reload(
         return;
     };
 
-    if key.just_pressed(KeyCode::KeyR)
-        && !weapon.is_reloading
-        && weapon.ammo < weapon.max_ammo
-    {
+    if key.just_pressed(KeyCode::KeyR) && !weapon.is_reloading && weapon.ammo < weapon.max_ammo {
         weapon.is_reloading = true;
         weapon.reload_timer = weapon.reload_duration;
         info!("Reloading…");
@@ -196,13 +193,9 @@ fn process_shoot_events(
             ..default()
         };
 
-        if let Some(hit) = spatial_query.cast_ray(
-            event.origin,
-            event.direction,
-            100.0,
-            true,
-            &filter,
-        ) {
+        if let Some(hit) =
+            spatial_query.cast_ray(event.origin, event.direction, 100.0, true, &filter)
+        {
             // In avian3d 0.5, the field is `distance` (not `time_of_impact`).
             let hit_point = event.origin + *event.direction * hit.distance;
 
@@ -270,7 +263,10 @@ fn apply_damage(
                 let victim_id = victim_player.map(|p| p.id).unwrap_or(0);
 
                 info!("Kill! Player {} killed player {}.", killer_id, victim_id);
-                kill_events.write(KillEvent { killer_id, victim_id });
+                kill_events.write(KillEvent {
+                    killer_id,
+                    victim_id,
+                });
             }
         }
     }

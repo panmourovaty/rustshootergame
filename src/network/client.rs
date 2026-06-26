@@ -1,4 +1,4 @@
-/// Client network plugin - lightyear 0.26.
+/// Client network plugin - lightyear 0.28.
 ///
 /// Native builds use UDP; WASM builds use WebTransport.
 ///
@@ -13,7 +13,6 @@
 /// Playing state:
 ///   OnEnter(Playing)    → send JoinMsg to server.
 ///   Update(Playing)     → throttled position updates, read server messages.
-
 use bevy::prelude::*;
 use lightyear::prelude::client::*;
 use lightyear::prelude::*;
@@ -27,20 +26,19 @@ use std::net::SocketAddr;
 
 // WASM-only imports for the hostname-based WebTransport path.
 #[cfg(target_arch = "wasm32")]
-use lightyear_aeronet::AeronetLinkOf;
-#[cfg(target_arch = "wasm32")]
 use aeronet_webtransport::client::{ClientConfig as WtClientConfig, WebTransportClient};
+#[cfg(target_arch = "wasm32")]
+use lightyear_aeronet::AeronetLinkOf;
 
 use super::protocol::{
     GameChannel, HitMsg, JoinMsg, KillNotifyMsg, MapUrlMsg, PlayerJoinMsg, PlayerLeaveMsg,
     PosChannel, PosUpdateMsg, ProtocolPlugin, RelayedPosMsg, TakeDamageMsg, PROTOCOL_ID,
 };
-use crate::map_loader::LoadMapFromUrl;
 use crate::game::{ConnectionError, GameState, PlayerProfile};
+use crate::map_loader::LoadMapFromUrl;
 use crate::player::LocalPlayer;
 use crate::pvp::{
-    LocalPlayerDamaged, RemoteKillEvent, RemotePlayerJoined, RemotePlayerLeft,
-    RemotePlayerMoved,
+    LocalPlayerDamaged, RemoteKillEvent, RemotePlayerJoined, RemotePlayerLeft, RemotePlayerMoved,
 };
 use crate::weapon::RemoteHitEvent;
 
@@ -192,7 +190,10 @@ fn start_connecting(
         match NetcodeClient::new(auth, NetcodeConfig::default()) {
             Ok(netcode_client) => {
                 spawn_transport(&mut commands, &addr_str, netcode_client, &profile);
-                info!("Connecting to https://{} as '{}'…", addr_str, profile.username);
+                info!(
+                    "Connecting to https://{} as '{}'…",
+                    addr_str, profile.username
+                );
             }
             Err(e) => {
                 let msg = format!("Failed to create NetcodeClient: {:?}", e);
@@ -245,10 +246,7 @@ fn cleanup_pending_client(
 /// Despawns the connected lightyear client entity when returning to the
 /// connect screen (e.g. after game over), so the network session is fully
 /// torn down and the next connection starts from a clean state.
-fn disconnect_client(
-    mut commands: Commands,
-    client_query: Query<Entity, With<Client>>,
-) {
+fn disconnect_client(mut commands: Commands, client_query: Query<Entity, With<Client>>) {
     for entity in client_query.iter() {
         commands.entity(entity).despawn();
         info!("Disconnected from server, client entity despawned.");
@@ -350,10 +348,7 @@ fn wt_hostname_link(
                 return;
             }
         };
-        let mut aeronet_entity = world.spawn((
-            AeronetLinkOf(entity),
-            Name::from("WebTransportClient"),
-        ));
+        let aeronet_entity = world.spawn((AeronetLinkOf(entity), Name::from("WebTransportClient")));
         WebTransportClient::connect(config, url).apply(aeronet_entity);
     });
 }
@@ -374,7 +369,10 @@ fn send_join_msg(
     for mut sender in client_query.iter_mut() {
         sender.send::<GameChannel>(msg.clone());
         sent = true;
-        warn!("[NET] Sent JoinMsg: id={} username='{}'", msg.client_id, msg.username);
+        warn!(
+            "[NET] Sent JoinMsg: id={} username='{}'",
+            msg.client_id, msg.username
+        );
     }
     if !sent {
         warn!("[NET] send_join_msg: query returned nothing - MessageSender<JoinMsg> not found!");
@@ -433,14 +431,8 @@ fn process_server_messages(
     mut kill_events: MessageWriter<RemoteKillEvent>,
     mut map_url_events: MessageWriter<LoadMapFromUrl>,
 ) {
-    for (
-        mut join_rx,
-        mut leave_rx,
-        mut pos_rx,
-        mut damage_rx,
-        mut kill_rx,
-        mut map_url_rx,
-    ) in client_query.iter_mut()
+    for (mut join_rx, mut leave_rx, mut pos_rx, mut damage_rx, mut kill_rx, mut map_url_rx) in
+        client_query.iter_mut()
     {
         // PlayerJoinMsg
         for msg in join_rx.receive() {
@@ -584,13 +576,15 @@ fn spawn_transport(
     } else {
         SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0)
     };
-    let entity = commands.spawn((
-        Name::new("GameClient"),
-        PendingClient,
-        UdpIo::default(),
-        LocalAddr(local_addr),
-        netcode_client,
-    )).id();
+    let entity = commands
+        .spawn((
+            Name::new("GameClient"),
+            PendingClient,
+            UdpIo::default(),
+            LocalAddr(local_addr),
+            netcode_client,
+        ))
+        .id();
     commands.trigger(Connect { entity });
     info!("Using UDP transport → {}", server_addr);
 }
@@ -615,18 +609,21 @@ fn spawn_transport(
 ) {
     use lightyear::prelude::client::Connect;
 
-    let cert_digest = option_env!("RSG_CERT_DIGEST")
-        .unwrap_or("")
-        .to_string();
+    let cert_digest = option_env!("RSG_CERT_DIGEST").unwrap_or("").to_string();
 
     let url = format!("https://{addr_str}");
 
-    let entity = commands.spawn((
-        Name::new("GameClient"),
-        PendingClient,
-        WebTransportHostname { url: url.clone(), cert_digest },
-        netcode_client,
-    )).id();
+    let entity = commands
+        .spawn((
+            Name::new("GameClient"),
+            PendingClient,
+            WebTransportHostname {
+                url: url.clone(),
+                cert_digest,
+            },
+            netcode_client,
+        ))
+        .id();
     commands.trigger(Connect { entity });
     info!("Using WebTransport → {}", url);
 }

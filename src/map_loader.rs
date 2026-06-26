@@ -1,3 +1,4 @@
+use avian3d::prelude::*;
 /// Dynamic map loader.
 ///
 /// When the server sends a `MapUrlMsg`, this module:
@@ -27,7 +28,6 @@
 /// ```
 ///
 /// See `MAP_FORMAT.md` in the repository root for the full authoring guide.
-
 use bevy::asset::io::{
     memory::{Dir, MemoryAssetReader},
     AssetSourceBuilder,
@@ -38,7 +38,6 @@ use bevy::gltf::{convert_coordinates::GltfConvertCoordinates, Gltf, GltfLoaderSe
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
 use bevy::render::render_resource::{TextureAspect, TextureViewDescriptor, TextureViewDimension};
-use avian3d::prelude::*;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -94,8 +93,11 @@ impl Plugin for MapLoaderPlugin {
 pub fn create_map_asset_source() -> (AssetSourceBuilder, Dir) {
     let dir = Dir::default();
     let dir_for_reader = dir.clone();
-    let builder =
-        AssetSourceBuilder::new(move || Box::new(MemoryAssetReader { root: dir_for_reader.clone() }));
+    let builder = AssetSourceBuilder::new(move || {
+        Box::new(MemoryAssetReader {
+            root: dir_for_reader.clone(),
+        })
+    });
     (builder, dir)
 }
 
@@ -180,7 +182,10 @@ fn show_waiting_overlay(mut commands: Commands) {
             c.spawn((
                 MapLoadingLabel,
                 Text::new("Waiting for server map..."),
-                TextFont { font_size: 28.0, ..default() },
+                TextFont {
+                    font_size: FontSize::Px(28.0),
+                    ..default()
+                },
                 TextColor(Color::WHITE),
             ));
         });
@@ -227,8 +232,7 @@ fn handle_load_map_event(
             **text = "Downloading map...".to_string();
         }
 
-        let slot: Arc<Mutex<Option<Result<ExtractedMap, String>>>> =
-            Arc::new(Mutex::new(None));
+        let slot: Arc<Mutex<Option<Result<ExtractedMap, String>>>> = Arc::new(Mutex::new(None));
 
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -286,7 +290,10 @@ fn poll_download(
             }
         }
         Ok(extracted) => {
-            info!("[MAP] Extracted {} files; inserting into map:// source", extracted.files.len());
+            info!(
+                "[MAP] Extracted {} files; inserting into map:// source",
+                extracted.files.len()
+            );
 
             // Advance the overlay message - download done, now waiting for GPU upload.
             for mut text in label_query.iter_mut() {
@@ -296,10 +303,7 @@ fn poll_download(
             // Populate spawn points from the optional text file.
             if let Some(sp_bytes) = extracted.files.get("spawn_points.txt") {
                 let text = String::from_utf8_lossy(sp_bytes);
-                let points: Vec<Vec3> = text
-                    .lines()
-                    .filter_map(parse_vec3_line)
-                    .collect();
+                let points: Vec<Vec3> = text.lines().filter_map(parse_vec3_line).collect();
                 if !points.is_empty() {
                     info!("[MAP] Loaded {} spawn points", points.len());
                     spawn_points.0 = points;
@@ -318,29 +322,27 @@ fn poll_download(
                     ImageSampler::Default,
                     RenderAssetUsages::RENDER_WORLD,
                 ) {
-                    Ok(mut img) => {
-                        match img.reinterpret_stacked_2d_as_array(6) {
-                            Ok(()) => {
-                                img.texture_view_descriptor = Some(TextureViewDescriptor {
-                                    label: None,
-                                    format: None,
-                                    dimension: Some(TextureViewDimension::Cube),
-                                    usage: None,
-                                    aspect: TextureAspect::All,
-                                    base_mip_level: 0,
-                                    mip_level_count: None,
-                                    base_array_layer: 0,
-                                    array_layer_count: None,
-                                });
-                                let handle = images.add(img);
-                                commands.insert_resource(PendingSkybox(handle));
-                                info!("[MAP] skybox.webp decoded as cubemap - will apply to camera");
-                            }
-                            Err(e) => {
-                                warn!("[MAP] skybox.webp is not a valid 6-face vertical strip ({:?}); skipping", e);
-                            }
+                    Ok(mut img) => match img.reinterpret_stacked_2d_as_array(6) {
+                        Ok(()) => {
+                            img.texture_view_descriptor = Some(TextureViewDescriptor {
+                                label: None,
+                                format: None,
+                                dimension: Some(TextureViewDimension::Cube),
+                                usage: None,
+                                aspect: TextureAspect::All,
+                                base_mip_level: 0,
+                                mip_level_count: None,
+                                base_array_layer: 0,
+                                array_layer_count: None,
+                            });
+                            let handle = images.add(img);
+                            commands.insert_resource(PendingSkybox(handle));
+                            info!("[MAP] skybox.webp decoded as cubemap - will apply to camera");
                         }
-                    }
+                        Err(e) => {
+                            warn!("[MAP] skybox.webp is not a valid 6-face vertical strip ({:?}); skipping", e);
+                        }
+                    },
                     Err(e) => {
                         warn!("[MAP] Failed to decode skybox.webp: {:?}; skipping", e);
                     }
@@ -356,15 +358,15 @@ fn poll_download(
             // GLTF uses +Z-forward / −X-right; Bevy uses −Z-forward / +X-right.
             // rotate_scene_entity applies a 180° Y rotation to the scene root so
             // normals, lighting and geometry all align with Bevy's coordinate system.
-            let scene_handle: Handle<Gltf> = asset_server.load_with_settings(
-                "map://scene.glb",
-                |s: &mut GltfLoaderSettings| {
+            let scene_handle: Handle<Gltf> = asset_server
+                .load_builder()
+                .with_settings(|s: &mut GltfLoaderSettings| {
                     s.convert_coordinates = Some(GltfConvertCoordinates {
                         rotate_scene_entity: true,
                         rotate_meshes: false,
                     });
-                },
-            );
+                })
+                .load("map://scene.glb");
             commands.insert_resource(LoadingMapHandles {
                 scene: scene_handle,
                 scene_loaded: false,
@@ -424,11 +426,13 @@ fn poll_gltf_loaded(
             .or_else(|| gltf.scenes.first().cloned())
             .expect("scene.glb has no scenes");
 
-        let map_entity = commands.spawn((
-            Name::new("DynamicMap"),
-            DynamicMap,
-            SceneRoot(scene_handle),
-        )).id();
+        let map_entity = commands
+            .spawn((
+                Name::new("DynamicMap"),
+                DynamicMap,
+                WorldAssetRoot(scene_handle),
+            ))
+            .id();
         commands.insert_resource(PendingMapCollider(map_entity));
         info!("[MAP] Map scene spawned; waiting for SceneSpawner before attaching colliders");
     }
@@ -491,16 +495,25 @@ fn attach_map_colliders(
         };
         match Collider::trimesh_from_mesh(mesh) {
             Some(collider) => {
-                commands.entity(*entity).insert((collider, RigidBody::Static));
+                commands
+                    .entity(*entity)
+                    .insert((collider, RigidBody::Static));
                 created += 1;
             }
             None => {
-                warn!("[MAP] trimesh_from_mesh returned None for {:?} - skipping", entity);
+                warn!(
+                    "[MAP] trimesh_from_mesh returned None for {:?} - skipping",
+                    entity
+                );
             }
         }
     }
 
-    info!("[MAP] Created {} trimesh collider(s) from {} mesh(es)", created, mesh_entities.len());
+    info!(
+        "[MAP] Created {} trimesh collider(s) from {} mesh(es)",
+        created,
+        mesh_entities.len()
+    );
     commands.remove_resource::<PendingMapCollider>();
 
     // Teleport the player onto the now-solid floor.
@@ -525,10 +538,12 @@ fn apply_skybox(
     mut commands: Commands,
 ) {
     let Some(pending) = pending else { return };
-    let Ok(camera_entity) = camera_query.single() else { return };
+    let Ok(camera_entity) = camera_query.single() else {
+        return;
+    };
 
     commands.entity(camera_entity).insert(Skybox {
-        image: pending.0.clone(),
+        image: Some(pending.0.clone()),
         brightness: 1000.0,
         rotation: Quat::IDENTITY,
     });
@@ -588,7 +603,9 @@ fn extract_archive(compressed: &[u8]) -> Result<ExtractedMap, String> {
     // Decompress zstd stream.
     let mut decoder = StreamingDecoder::new(compressed).map_err(|e| e.to_string())?;
     let mut tar_bytes = Vec::new();
-    decoder.read_to_end(&mut tar_bytes).map_err(|e| e.to_string())?;
+    decoder
+        .read_to_end(&mut tar_bytes)
+        .map_err(|e| e.to_string())?;
 
     // Extract tar.
     let mut archive = tar::Archive::new(std::io::Cursor::new(tar_bytes));

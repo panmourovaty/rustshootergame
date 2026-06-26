@@ -1,10 +1,9 @@
 /// Shared network protocol definitions used by both the server and client.
 ///
-/// Shared protocol - compatible with lightyear 0.26 / Bevy 0.18.
-
+/// Shared protocol - compatible with lightyear 0.28 / Bevy 0.19.
 use bevy::prelude::*;
-use serde::{Deserialize, Serialize};
 use lightyear::prelude::*;
+use serde::{Deserialize, Serialize};
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

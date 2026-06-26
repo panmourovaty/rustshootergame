@@ -1,7 +1,7 @@
-use bevy::prelude::*;
 use crate::game::{GameState, KillEvent, PlayerNames, Scores};
 use crate::player::{Health, LocalPlayer};
 use crate::weapon::Weapon;
+use bevy::prelude::*;
 
 // ─── Game-over timer resource ────────────────────────────────────────────────
 
@@ -61,10 +61,7 @@ impl Plugin for UiPlugin {
         );
         app.add_systems(OnEnter(GameState::GameOver), show_game_over_screen);
         app.add_systems(OnExit(GameState::GameOver), hide_game_over_screen);
-        app.add_systems(
-            Update,
-            tick_game_over.run_if(in_state(GameState::GameOver)),
-        );
+        app.add_systems(Update, tick_game_over.run_if(in_state(GameState::GameOver)));
     }
 }
 
@@ -167,7 +164,7 @@ fn spawn_health_display(parent: &mut ChildSpawnerCommands) {
         Name::new("HealthText"),
         Text::new("HP: 100"),
         TextFont {
-            font_size: 22.0,
+            font_size: FontSize::Px(22.0),
             ..default()
         },
         TextColor(Color::srgb(0.2, 1.0, 0.2)),
@@ -188,7 +185,7 @@ fn spawn_ammo_display(parent: &mut ChildSpawnerCommands) {
         Name::new("AmmoText"),
         Text::new("30 / 30"),
         TextFont {
-            font_size: 22.0,
+            font_size: FontSize::Px(22.0),
             ..default()
         },
         TextColor(Color::srgb(1.0, 0.9, 0.2)),
@@ -209,7 +206,7 @@ fn spawn_reloading_text(parent: &mut ChildSpawnerCommands) {
         Name::new("ReloadingText"),
         Text::new("RELOADING..."),
         TextFont {
-            font_size: 20.0,
+            font_size: FontSize::Px(20.0),
             ..default()
         },
         TextColor(Color::srgba(1.0, 0.6, 0.1, 0.0)), // invisible until needed
@@ -328,7 +325,7 @@ fn append_kill_feed_entries(
                 Name::new("KillFeedEntry"),
                 Text::new(msg),
                 TextFont {
-                    font_size: 16.0,
+                    font_size: FontSize::Px(16.0),
                     ..default()
                 },
                 TextColor(Color::srgb(1.0, 0.3, 0.3)),
@@ -409,17 +406,29 @@ fn show_game_over_screen(
         .with_children(|parent| {
             parent.spawn((
                 Text::new("GAME OVER"),
-                TextFont { font_size: 64.0, ..default() },
+                TextFont {
+                    font_size: FontSize::Px(64.0),
+                    ..default()
+                },
                 TextColor(Color::srgb(1.0, 0.2, 0.2)),
             ));
             parent.spawn((
                 Text::new(format!("{} wins with {} kills!", winner_name, winner_kills)),
-                TextFont { font_size: 32.0, ..default() },
+                TextFont {
+                    font_size: FontSize::Px(32.0),
+                    ..default()
+                },
                 TextColor(Color::WHITE),
             ));
             parent.spawn((
-                Text::new(format!("Returning to lobby in {}...", GAME_OVER_DELAY as u32)),
-                TextFont { font_size: 20.0, ..default() },
+                Text::new(format!(
+                    "Returning to lobby in {}...",
+                    GAME_OVER_DELAY as u32
+                )),
+                TextFont {
+                    font_size: FontSize::Px(20.0),
+                    ..default()
+                },
                 TextColor(Color::srgb(0.7, 0.7, 0.7)),
                 GameOverCountdownText,
             ));
@@ -444,10 +453,7 @@ fn tick_game_over(
     }
 }
 
-fn hide_game_over_screen(
-    mut commands: Commands,
-    query: Query<Entity, With<GameOverScreen>>,
-) {
+fn hide_game_over_screen(mut commands: Commands, query: Query<Entity, With<GameOverScreen>>) {
     for entity in query.iter() {
         commands.entity(entity).despawn();
     }

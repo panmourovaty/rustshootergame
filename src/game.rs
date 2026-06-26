@@ -159,10 +159,7 @@ impl Plugin for GamePlugin {
             },
         );
 
-        app.add_systems(
-            Update,
-            record_kills.run_if(in_state(GameState::Playing)),
-        );
+        app.add_systems(Update, record_kills.run_if(in_state(GameState::Playing)));
         app.add_systems(
             Update,
             check_win_condition.run_if(in_state(GameState::Playing)),
@@ -193,11 +190,10 @@ fn setup_lighting(mut commands: Commands, ambient: Option<ResMut<GlobalAmbientLi
         DirectionalLight {
             color: Color::srgb(1.0, 0.95, 0.82),
             illuminance: 25_000.0,
-            shadows_enabled: true,
+            shadow_maps_enabled: true,
             ..default()
         },
-        Transform::from_xyz(0.0, 100.0, 0.0)
-            .looking_at(Vec3::new(-30.0, 0.0, -30.0), Vec3::Z),
+        Transform::from_xyz(0.0, 100.0, 0.0).looking_at(Vec3::new(-30.0, 0.0, -30.0), Vec3::Z),
     ));
 }
 

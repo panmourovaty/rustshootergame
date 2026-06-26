@@ -130,19 +130,27 @@ fn main() {
         let id = rt
             .block_on(Identity::load_pemfiles(cert, key))
             .expect("failed to load TLS certificate from PEM files");
-        ServerIdentity { identity: id, self_signed_digest: None }
+        ServerIdentity {
+            identity: id,
+            self_signed_digest: None,
+        }
     } else {
         use aeronet_webtransport::wtransport::Identity;
         let id = Identity::self_signed(["localhost", "127.0.0.1", "::1"])
             .expect("failed to generate self-signed TLS certificate");
         let dotted = format!("{}", id.certificate_chain().as_slice()[0].hash());
         let digest = dotted.replace(':', "");
-        ServerIdentity { identity: id, self_signed_digest: Some(digest) }
+        ServerIdentity {
+            identity: id,
+            self_signed_digest: Some(digest),
+        }
     };
 
     App::new()
         // Insert GameConfig before GamePlugin so init_resource keeps our value.
-        .insert_resource(GameConfig { kill_limit: config.kill_limit })
+        .insert_resource(GameConfig {
+            kill_limit: config.kill_limit,
+        })
         .insert_resource(MapUrl(config.map_url))
         .insert_resource(identity)
         .add_plugins(MinimalPlugins)

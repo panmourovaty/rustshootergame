@@ -1,7 +1,7 @@
-use bevy::input::ButtonState;
-use bevy::input::keyboard::{Key, KeyboardInput};
-use bevy::prelude::*;
 use crate::game::{ConnectionError, GameState, PlayerProfile};
+use bevy::input::keyboard::{Key, KeyboardInput};
+use bevy::input::ButtonState;
+use bevy::prelude::*;
 
 pub struct ConnectScreenPlugin;
 
@@ -119,7 +119,10 @@ fn spawn_connect_screen(
                 // ── Title ──────────────────────────────────────────────────────
                 panel.spawn((
                     Text::new("RUST SHOOTER"),
-                    TextFont { font_size: 46.0, ..default() },
+                    TextFont {
+                        font_size: FontSize::Px(46.0),
+                        ..default()
+                    },
                     TextColor(Color::srgb(1.0, 0.30, 0.10)),
                     Node {
                         align_self: AlignSelf::Center,
@@ -131,7 +134,10 @@ fn spawn_connect_screen(
                 // ── Username ───────────────────────────────────────────────────
                 panel.spawn((
                     Text::new("Username"),
-                    TextFont { font_size: 15.0, ..default() },
+                    TextFont {
+                        font_size: FontSize::Px(15.0),
+                        ..default()
+                    },
                     TextColor(Color::srgb(0.72, 0.72, 0.72)),
                 ));
                 panel
@@ -151,7 +157,10 @@ fn spawn_connect_screen(
                     .with_children(|btn| {
                         btn.spawn((
                             Text::new(profile.username.clone() + "|"),
-                            TextFont { font_size: 20.0, ..default() },
+                            TextFont {
+                                font_size: FontSize::Px(20.0),
+                                ..default()
+                            },
                             TextColor(Color::WHITE),
                             FieldDisplay(InputField::Username),
                         ));
@@ -161,9 +170,15 @@ fn spawn_connect_screen(
                 if !profile.server_addr_locked {
                     panel.spawn((
                         Text::new("Server Address"),
-                        TextFont { font_size: 15.0, ..default() },
+                        TextFont {
+                            font_size: FontSize::Px(15.0),
+                            ..default()
+                        },
                         TextColor(Color::srgb(0.72, 0.72, 0.72)),
-                        Node { margin: UiRect::top(Val::Px(8.0)), ..default() },
+                        Node {
+                            margin: UiRect::top(Val::Px(8.0)),
+                            ..default()
+                        },
                     ));
                     panel
                         .spawn((
@@ -182,7 +197,10 @@ fn spawn_connect_screen(
                         .with_children(|btn| {
                             btn.spawn((
                                 Text::new(profile.server_addr.clone() + " "),
-                                TextFont { font_size: 20.0, ..default() },
+                                TextFont {
+                                    font_size: FontSize::Px(20.0),
+                                    ..default()
+                                },
                                 TextColor(Color::WHITE),
                                 FieldDisplay(InputField::ServerIp),
                             ));
@@ -194,9 +212,15 @@ fn spawn_connect_screen(
                 panel.spawn((
                     Name::new("ErrorText"),
                     Text::new(error_msg),
-                    TextFont { font_size: 14.0, ..default() },
+                    TextFont {
+                        font_size: FontSize::Px(14.0),
+                        ..default()
+                    },
                     TextColor(Color::srgb(1.0, 0.30, 0.30)),
-                    Node { min_height: Val::Px(18.0), ..default() },
+                    Node {
+                        min_height: Val::Px(18.0),
+                        ..default()
+                    },
                     ErrorText,
                 ));
 
@@ -219,7 +243,10 @@ fn spawn_connect_screen(
                     .with_children(|btn| {
                         btn.spawn((
                             Text::new("CONNECT"),
-                            TextFont { font_size: 24.0, ..default() },
+                            TextFont {
+                                font_size: FontSize::Px(24.0),
+                                ..default()
+                            },
                             TextColor(Color::WHITE),
                         ));
                     });
@@ -227,7 +254,10 @@ fn spawn_connect_screen(
                 // ── Hint ───────────────────────────────────────────────────────
                 panel.spawn((
                     Text::new("Click a field to type  |  Enter or click CONNECT to join"),
-                    TextFont { font_size: 12.0, ..default() },
+                    TextFont {
+                        font_size: FontSize::Px(12.0),
+                        ..default()
+                    },
                     TextColor(Color::srgb(0.45, 0.45, 0.45)),
                     Node {
                         align_self: AlignSelf::Center,
@@ -290,12 +320,18 @@ fn spawn_connecting_screen(mut commands: Commands, profile: Res<PlayerProfile>) 
             .with_children(|panel| {
                 panel.spawn((
                     Text::new("Connecting..."),
-                    TextFont { font_size: 32.0, ..default() },
+                    TextFont {
+                        font_size: FontSize::Px(32.0),
+                        ..default()
+                    },
                     TextColor(Color::WHITE),
                 ));
                 panel.spawn((
                     Text::new(format!("> {}", profile.server_addr)),
-                    TextFont { font_size: 18.0, ..default() },
+                    TextFont {
+                        font_size: FontSize::Px(18.0),
+                        ..default()
+                    },
                     TextColor(Color::srgb(0.6, 0.6, 0.6)),
                 ));
                 // Cancel button
@@ -316,7 +352,10 @@ fn spawn_connecting_screen(mut commands: Commands, profile: Res<PlayerProfile>) 
                     .with_children(|btn| {
                         btn.spawn((
                             Text::new("Cancel"),
-                            TextFont { font_size: 20.0, ..default() },
+                            TextFont {
+                                font_size: FontSize::Px(20.0),
+                                ..default()
+                            },
                             TextColor(Color::WHITE),
                         ));
                     });

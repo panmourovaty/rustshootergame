@@ -77,7 +77,7 @@ Blender is Z-up; the glTF exporter converts automatically when **Y Up** is check
 
 ## Physics collision
 
-Collision is generated automatically from `scene.glb` - every mesh receives a **trimesh collider** via Avian3D's `ColliderConstructorHierarchy`.  No extra file is needed.
+Collision is generated automatically from `scene.glb` - every mesh receives a **trimesh collider** after the GLTF scene is instantiated.  No extra file is needed.
 
 ### Performance tips
 
@@ -89,7 +89,7 @@ Collision is generated automatically from `scene.glb` - every mesh receives a **
 
 ## Blender Authoring Guide
 
-This section covers everything needed to produce GLB files that load correctly in Bevy 0.18.
+This section covers everything needed to produce GLB files that load correctly in Bevy 0.19.
 
 ### Prerequisites
 
@@ -283,7 +283,7 @@ Use this table to know what you can and cannot do in your material setup:
 | Punctual lights (Point, Spot, Sun) | ✅ | Requires `KHR_lights_punctual` - enabled by Blender when **Punctual Lights** is checked |
 | KTX2 / Basis Universal textures | ✅ | Smaller GPU memory; requires KTX2 tools to prepare |
 | Draco mesh compression | ❌ | **Not supported.** Causes a load error. Never enable. |
-| Specular / Sheen / Coat materials | ❌ | glTF extensions not implemented in Bevy 0.18 |
+| Specular / Sheen / Coat materials | ❌ | glTF extensions not implemented in Bevy 0.19 |
 | Transmission / Volume | ❌ | Not supported |
 | Morph targets / blend shapes | ❌ | Loaded but not animated |
 | Skeletal animation | ⚠️ | Loaded but the game does not play animations on map geometry |

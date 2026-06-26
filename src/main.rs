@@ -1,5 +1,6 @@
 /// Client binary - shows the connect screen, then runs the full game.
 use bevy::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::window::WindowResolution;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -75,10 +76,10 @@ fn main() {
             ..default()
         })
         .set(RenderPlugin {
-            render_creation: RenderCreation::Automatic(WgpuSettings {
+            render_creation: RenderCreation::Automatic(Box::new(WgpuSettings {
                 backends: Some(wgpu_backends()),
                 ..default()
-            }),
+            })),
             ..default()
         });
 

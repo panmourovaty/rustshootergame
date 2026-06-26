@@ -41,7 +41,13 @@ networking = [
 #                     using a CA-signed certificate.
 web = [
     "bevy/webgpu",
-    "bevy/3d",
+    "bevy/web",
+    "bevy/default_app",
+    "bevy/bevy_winit",
+    "bevy/3d_bevy_render",
+    "bevy/ui_bevy_render",
+    "bevy/bevy_ui_widgets",
+    "bevy/scene",
     "bevy/mouse",
     "bevy/keyboard",
     "bevy/default_font",
@@ -58,14 +64,25 @@ web = [
 ]
 
 [dependencies]
-bevy = { version = "0.18", default-features = false, features = [
-    "3d",
+bevy = { version = "0.19", default-features = false, features = [
+    "std",
+    "multi_threaded",
+    "default_app",
+    "bevy_winit",
+    "x11",
+    "bevy_clipboard",
+    "custom_cursor",
+    "sysinfo_plugin",
+    "3d_bevy_render",
+    "ui_bevy_render",
+    "bevy_ui_widgets",
+    "scene",
     "mouse",
     "keyboard",
     "default_font",
     "webp",
 ] }
-avian3d = { version = "0.6", default-features = false, features = [
+avian3d = { version = "0.7", default-features = false, features = [
     "3d",
     "f32",
     "parry-f32",
@@ -73,9 +90,9 @@ avian3d = { version = "0.6", default-features = false, features = [
     "xpbd_joints",
     "parallel",
 ] }
-lightyear = { version = "0.26", optional = true, default-features = false }
-aeronet_webtransport = { version = "0.19", optional = true }
-lightyear_aeronet = { version = "0.26", optional = true, default-features = false }
+lightyear = { version = "0.28", optional = true, default-features = false }
+aeronet_webtransport = { version = "0.21", optional = true }
+lightyear_aeronet = { version = "0.28", optional = true, default-features = false }
 # getrandom needs the "js" feature to compile for wasm32-unknown-unknown,
 # so it can use the browser's crypto.getRandomValues() API.
 serde = { version = "1", features = ["derive"] }
